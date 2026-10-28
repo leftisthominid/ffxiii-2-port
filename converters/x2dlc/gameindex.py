@@ -4,7 +4,7 @@
 #          the title update's archives (filelist_patch_u / filelist_patch_scr_u), which come first.
 #   Steam: <Steam folder>\alba_data\sys\filelistu / filelist_scru, alba_data\zone, and the update
 #          archives in alba_data\udp (patch_u / patch_scr_u), which come first.
-# Set 'u' (the English set) on both. Everything is opened read-only.
+# Set 'u' is English; Steam set 'c' contains Japanese media. Everything is opened read-only.
 import os, re, zlib, threading
 from . import archive
 
@@ -13,7 +13,9 @@ def norm(path):
 
 class GameIndex:
     """files: {norm path: (archive path, pos, uncompressed, compressed, real path, code, ftype)}"""
-    def __init__(self, root, platform, update=None, log=print):
+    def __init__(self, root, platform, update=None, log=print, language_set='u'):
+        if language_set not in ('u', 'c') or (platform == 'x360' and language_set != 'u'):
+            raise ValueError('unsupported archive language set')
         self.root, self.platform = root, platform
         alba = os.path.join(root, 'alba_data')
         if not os.path.isdir(alba):
@@ -28,18 +30,18 @@ class GameIndex:
                     lists.append((os.path.join(update, f'filelist_{n}u.x360.bin'), os.path.join(update, f'white_{n}u.x360.bin')))
         else:
             for n in ('patch_', 'patch_scr_'):
-                lists.append((os.path.join(alba, 'udp', f'filelist_{n}u.win32.bin'), os.path.join(alba, 'udp', f'white_{n}u.win32.bin')))
+                lists.append((os.path.join(alba, 'udp', f'filelist_{n}{language_set}.win32.bin'), os.path.join(alba, 'udp', f'white_{n}{language_set}.win32.bin')))
         sysd = os.path.join(alba, 'sys')
-        lists.append((os.path.join(sysd, f'filelistu.{platform}.bin'), os.path.join(sysd, f'white_imgu.{platform}.bin')))
-        lists.append((os.path.join(sysd, f'filelist_scru.{platform}.bin'), os.path.join(sysd, f'white_scru.{platform}.bin')))
+        lists.append((os.path.join(sysd, f'filelist{language_set}.{platform}.bin'), os.path.join(sysd, f'white_img{language_set}.{platform}.bin')))
+        lists.append((os.path.join(sysd, f'filelist_scr{language_set}.{platform}.bin'), os.path.join(sysd, f'white_scr{language_set}.{platform}.bin')))
         for fl, wh in lists:
             if os.path.exists(fl) and os.path.exists(wh):
                 self._add(fl, wh, os.path.basename(fl))
         # zone archives: their lists are files of the archives above
         for key, e in list(self.files.items()):
-            m = re.match(r'zone/filelist_(z\d{4})u\.(?:win32|x360)\.bin$', e[4])
+            m = re.match(r'zone/filelist_(z\d{4})[uc]\.(?:win32|x360)\.bin$', e[4])
             if not m: continue
-            arc = os.path.join(alba, 'zone', f'white_{m.group(1)}u_img.{platform}.bin')
+            arc = os.path.join(alba, 'zone', f'white_{m.group(1)}{language_set}_img.{platform}.bin')
             if not os.path.exists(arc) or os.path.getsize(arc) <= 2048: continue
             data = self.read(key)
             if data is None: continue

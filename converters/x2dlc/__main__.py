@@ -7,7 +7,7 @@ python -m x2dlc dlcknown --x360 <360 game folder> --tu <title update folder> --s
     their 360 bytes (all of them; learn keeps 300 MB of these): dlc_known.pkl in <work>
 python -m x2dlc build   --steam <Steam folder> --work <dir> --out <dir> [--packs 0000071,...] [--ffmpeg <exe>]
                         [--userdata <dir> --install] [--replace]
-    converts the packages of the manifests (data/manifests.json.gz) from the Steam files; with
+    converts the Steam-derived inventory in <work>/steam_manifest.json; with
     --install puts them where the port finds DLC (not over a 360 package with the same number
     unless --replace)
 python -m x2dlc compare --steam <Steam folder> --work <dir> --userdata <dir> [--packs ...] [--ffmpeg <exe>]
@@ -18,7 +18,7 @@ python -m x2dlc export  --x360 <360 game folder> --tu <title update folder> --st
     the material shader programs of both versions (export.py): XIII-2_Shaders.partNN in <out>
 The game folders are only read. Progress at least every 10 seconds.
 """
-import sys, os, re, time, json, gzip, collections, hashlib
+import sys, os, re, time, json, gzip, collections, hashlib, traceback
 from . import learn, gameindex, convert, package, archive, sound, texture, wpd, listconv
 
 def arg(name, default=None):
@@ -29,8 +29,8 @@ def say(*a):
     print(*a, flush=True)
 
 def manifests():
-    with gzip.open(os.path.join(os.path.dirname(__file__), 'data', 'manifests.json.gz'), 'rt') as f:
-        return json.load(f)
+    from . import manifest
+    return manifest.load(arg('--work'))
 
 def steam_name(path):
     return path.replace('.x360.', '.win32.')
@@ -59,7 +59,7 @@ def _module_closure(roots):
         m = todo.pop()
         if m in seen or not os.path.exists(os.path.join(here, m + '.py')): continue
         seen.add(m)
-        src = open(os.path.join(here, m + '.py'), encoding='utf-8').read()
+        with open(os.path.join(here, m + '.py'), encoding='utf-8') as stream: src = stream.read()
         for a in re.findall(r'from \.(\w+) import', src): todo.append(a)
         for names in re.findall(r'from \. import ([\w, ]+)', src):
             todo += [x.strip() for x in names.split(',') if x.strip()]
@@ -70,7 +70,10 @@ def code_groups(work, ffmpeg):
     import inspect
     here = os.path.dirname(__file__)
     def src(mods):
-        return b''.join(open(os.path.join(here, m + '.py'), 'rb').read() for m in mods)
+        parts = []
+        for m in mods:
+            with open(os.path.join(here, m + '.py'), 'rb') as stream: parts.append(stream.read())
+        return b''.join(parts)
     common = hashlib.sha1(CACHE_VERSION.encode())
     for part in CONVERTER_PARTS:
         common.update(inspect.getsource(getattr(convert.Converter, part)).encode())
@@ -112,6 +115,10 @@ def convert_list(conv, S, files, problems, tick, cache=None, groups=None, spawn=
             g = 'sound' if k in ('scd', 'soundpack') else 'model' if k in ('trb', 'mpk') else 'all'
             h = hashlib.sha1(groups[g].encode() + path.encode())
             h.update(hashlib.sha1(S.read(gameindex.norm(path)) or b'').digest())
+            if path.startswith('movie/') and getattr(conv, 'movie_dir', None):
+                transport = os.path.join(conv.movie_dir, os.path.basename(path))
+                if os.path.isfile(transport):
+                    with open(transport, 'rb') as stream: h.update(hashlib.sha1(stream.read()).digest())
             if rel: h.update(hashlib.sha1(S.read(gameindex.norm(rel)) or b'').digest())
             keys[path] = h.hexdigest()
         return keys[path]
@@ -217,6 +224,8 @@ def convert_list(conv, S, files, problems, tick, cache=None, groups=None, spawn=
                 if cache is not None and data: cache.put(path, key_of(path))
             except Exception as ex:
                 why = str(ex) if isinstance(ex, RuntimeError) and ppool and path in unit_of else f'{type(ex).__name__}: {ex}'
+                if not (isinstance(ex, RuntimeError) and ppool and path in unit_of):
+                    why += '\n' + traceback.format_exc(limit=12)
                 problems.append((path, why))
                 data = b''
             yield code, ftype, path, data
@@ -230,6 +239,18 @@ def cmd_learn():
 def cmd_dlcknown():
     learn.dlc_known(arg('--x360'), arg('--tu'), arg('--steam'), arg('--work'), log=say)
 
+def cmd_plan():
+    from . import manifest
+    say('Indexing Steam and the base disc/title update for the content inventory')
+    S = open_steam()
+    X = gameindex.GameIndex(arg('--x360'), 'x360', update=arg('--tu'), log=say)
+    try:
+        document = manifest.build(S, X, log=say)
+        manifest.save(document, arg('--work'))
+        say(f'Steam inventory: {document["provenance"]["selected"]} assets; no Xbox DLC metadata')
+    finally:
+        S.close(); X.close()
+
 def open_steam():
     st = arg('--steam')
     if os.path.isdir(os.path.join(st, 'alba_data')):
@@ -242,6 +263,7 @@ def cmd_build():
     S = open_steam()
     say(f'Steam version: {len(S.files)} files')
     conv = convert.Converter(data, log=say, ffmpeg=arg('--ffmpeg'))
+    conv.movie_dir = os.path.join(work, 'movies', 'placeholders')
     conv.read_pc = S.read
     mf = manifests()
     packs = arg('--packs', ','.join(sorted(mf))).split(',')
@@ -277,16 +299,16 @@ def cmd_build():
                                        listid=(ident, l['kind'])))
             cache.close(); cache.save(new)
             say(f'  {ident} {l["kind"]}: {cache.reused} of {len(files)} files unchanged since the last build (reused), {len(files) - cache.reused} converted')
+        say(f'  {ident}: {len(problems)} file(s) not converted' + ''.join(f'\n    {p}: {why}' for p, why in problems[:20]))
+        report.append(dict(pack=ident, name=m['name'], problems=problems, complete=not problems))
+        # a file that did not convert would be an empty file in the package: not installed then
+        # Missing movie preparation is a build failure too. Never report a
+        # package containing empty movie entries as a complete installation.
+        if problems and '--force' not in sys.argv:
+            say(f'  {ident}: previous build kept; incomplete output is in {new}')
+            continue
         shutil.rmtree(dest, ignore_errors=True)
         os.replace(new, dest)
-        say(f'  {ident}: {len(problems)} file(s) not converted' + ''.join(f'\n    {p}: {why}' for p, why in problems[:20]))
-        report.append(dict(pack=ident, name=m['name'], problems=problems))
-        # a file that did not convert would be an empty file in the package: not installed then
-        # (the movies are not in the Steam version: those stay empty, see README.txt)
-        serious = [p for p, why in problems if not p.endswith('.bik')]
-        if '--install' in sys.argv and userdata and serious and '--force' not in sys.argv:
-            say(f'  {ident}: NOT installed ({len(serious)} file(s) did not convert; --force installs it anyway)')
-            continue
         if '--install' in sys.argv and userdata:
             d = package.install(dest, userdata, name, m['name'], log=say)
             say(f'  installed: {d}')
@@ -299,16 +321,37 @@ def cmd_build():
         mp = os.path.join(userdata, 'x2_missing_movies.txt')
         if missing_movies:
             with open(mp, 'w') as f: f.write(''.join(n + '\n' for n in sorted(missing_movies)))
-            say(f'  movies not in the Steam version (their cutscenes go on without them): {", ".join(sorted(missing_movies))}')
+            say(f'  movies unavailable in the converted packages (their clips currently bypass playback): {", ".join(sorted(missing_movies))}')
         elif os.path.exists(mp):
             os.remove(mp)
     say('how the files were made: ' + ', '.join(f'{k} {v}' for k, v in sorted(conv.stats.items())))
     say('shaders: ' + ', '.join(f'{k} {v}' for k, v in sorted(conv.ctx.stats.items())))
+
     if sound.LOOPED: say(f'looped sounds re-encoded (loop over the whole sound): {len(sound.LOOPED)}')
-    json.dump(dict(report=report, stats=conv.stats), open(os.path.join(work, 'build_report.json'), 'w'), indent=1)
+    complete = bool(report) and all(r['complete'] for r in report)
+    if not complete: say('DLC conversion is INCOMPLETE; see build_report.json for unresolved files.')
+    with open(os.path.join(work, 'build_report.json'), 'w') as stream:
+        json.dump(dict(report=report, stats=conv.stats, complete=complete), stream, indent=1)
+    S.close()
+    return 0 if complete else 1
 
 def resource_diffs(ours, real):
     """per resource of two SEDBRES files (.trb / .mpk): the ones that differ, for the report"""
+    if ours[:4] == b'WPD\0' and real[:4] == b'WPD\0':
+        out = []
+        try:
+            a = {(n, e): d for n, e, d in wpd.read(ours)}
+            b = {(n, e): d for n, e, d in wpd.read(real)}
+            for key in sorted(a.keys() | b.keys()):
+                name, kind = (v.rstrip(b'\0').decode('latin1') for v in key)
+                if key not in a or key not in b:
+                    out.append(f'    MEMBER {name}.{kind}: missing from {"ours" if key not in a else "360"}')
+                    continue
+                nd = sum(u != v for u, v in zip(a[key], b[key])) + abs(len(a[key]) - len(b[key]))
+                if nd: out.append(f'    MEMBER {name}.{kind}: {nd} of {len(b[key])} bytes differ')
+        except Exception as ex:
+            out.append(f'    (bundle members not compared: {type(ex).__name__}: {ex})')
+        return out
     from . import trb
     try: a, b = trb.Trb(ours), trb.Trb(real)
     except Exception as ex: return [f'    (not compared by resource: {type(ex).__name__}: {ex})']
@@ -384,8 +427,8 @@ def cmd_compare():
     data = learn.load(work)
     S = open_steam()
     conv = convert.Converter(data, log=say, ffmpeg=arg('--ffmpeg'))
+    conv.movie_dir = os.path.join(work, 'movies', 'placeholders')
     conv.read_pc = S.read
-    mf = manifests()
     # the real 360 packages: installed, or moved aside by an install of the converted ones
     root = os.path.join(userdata, '0000000000000000', '53510806', '00000002')
     pkgdirs = {i: os.path.join(root, n) for i, n in package.installed(userdata).items() if not n.startswith('XIII2SteamDLC')}
@@ -396,7 +439,18 @@ def cmd_compare():
             ip = os.path.join(bak, name, 'identifier')
             if bak and os.path.exists(ip):
                 pkgdirs.setdefault(open(ip, 'rb').read()[:7].decode('latin1'), os.path.join(bak, name))
-    packs = arg('--packs', ','.join(sorted(mf))).split(',')
+    # Reference lists are an optional scoring oracle only. Building and
+    # installing content never reads these folders or their metadata.
+    mf = {}
+    for ident, folder in pkgdirs.items():
+        lists = []
+        for kind in ('img', 'scr'):
+            path = os.path.join(folder, f'filelist_p{ident}{kind}_u.x360.bin')
+            if os.path.isfile(path):
+                _, entries = archive.read_list(path)
+                lists.append(dict(kind=kind, files=[(e[0],e[1],e[5]) for e in entries]))
+        mf[ident] = dict(lists=lists)
+    packs = arg('--packs', ','.join(i for i in sorted(mf) if i in ('0000021','0000023','0000071'))).split(',')
     # --only <prefix,prefix>: just the files under these paths, every one saved for the report
     only = [x for x in arg('--only', '').split(',') if x]
     res = collections.defaultdict(collections.Counter)
@@ -500,23 +554,46 @@ def cmd_compare():
         for k, c in sorted(res.items()):
             fo.write(f'{k:24} ' + ', '.join(f'{a} {b}' for a, b in sorted(c.items())) + '\n')
         fo.write('\n' + '\n'.join(lines) + '\n')
-    say(open(out).read()[:6000])
+    with open(out) as stream:
+        say(stream.read()[:6000])
     say('how the files were made: ' + ', '.join(f'{k} {v}' for k, v in sorted(conv.stats.items())))
     say('shaders: ' + ', '.join(f'{k} {v}' for k, v in sorted(conv.ctx.stats.items())))
+    failed = sum(c.get('not converted', 0) for c in res.values())
+    checked = sum(c.get('exact', 0) + c.get('differs', 0) for c in res.values())
+    if failed or not checked:
+        say(f'Comparison incomplete: {failed} file(s) not converted; {checked} compared.')
+        return 1
+    return 0
 
 def cmd_export():
     from . import export
     export.export(arg('--x360'), arg('--tu'), arg('--steam'), arg('--work'), arg('--userdata'), arg('--out'), log=say)
 
+def cmd_movies():
+    from . import movies
+    S = open_steam()
+    X = gameindex.GameIndex(arg('--x360'), 'x360', update=arg('--tu'), log=say)
+    J = None
+    try:
+        if os.path.isfile(os.path.join(S.root, 'alba_data', 'sys', 'filelistc.win32.bin')):
+            J = gameindex.GameIndex(S.root, 'win32', language_set='c', log=say)
+        n = movies.prepare(S, X, arg('--work'), arg('--out'), arg('--ffmpeg'), log=say, japanese=J)
+        say(f'{n} full Steam DLC movies prepared with audio')
+    finally:
+        S.close(); X.close()
+        if J is not None: J.close()
+
 def main():
     cmd = sys.argv[1] if len(sys.argv) > 1 else ''
-    if cmd == 'learn': cmd_learn()
-    elif cmd == 'dlcknown': cmd_dlcknown()
-    elif cmd == 'export': cmd_export()
-    elif cmd == 'build': cmd_build()
-    elif cmd == 'compare': cmd_compare()
+    if cmd == 'learn': return cmd_learn()
+    elif cmd == 'dlcknown': return cmd_dlcknown()
+    elif cmd == 'export': return cmd_export()
+    elif cmd == 'build': return cmd_build()
+    elif cmd == 'compare': return cmd_compare()
+    elif cmd == 'movies': return cmd_movies()
+    elif cmd == 'plan': return cmd_plan()
     else:
         print(__doc__); sys.exit(1)
 
 if __name__ == '__main__':
-    main()
+    sys.exit(main())

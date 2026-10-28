@@ -59,6 +59,7 @@ uint64_t lr_now_us() {
 #include <mutex>
 #include <string>
 #include <thread>
+#include <fstream>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -98,6 +99,30 @@ struct LrMovieEntry {
   uint32_t size;    // 360 .bik size
   uint32_t code;    // file code: what the game puts in the BinkOpen name
 };
+
+// Generated from the prepared Steam movies. Matching the verified transport's
+// size avoids importing Xbox DLC file codes or movie lists into the overlay.
+// The converter keeps these sizes distinct from one another and base movies.
+struct X2SteamMovie {
+  std::string name;
+  LrMovieEntry entry{};
+};
+const std::vector<X2SteamMovie>& x2_steam_movies() {
+  static const std::vector<X2SteamMovie> entries = [] {
+    std::vector<X2SteamMovie> result;
+    std::ifstream file(X2InstallDir() / "movies_steam" / "index.txt");
+    std::string name;
+    uint32_t size;
+    while (file >> name >> size) {
+      if (name.empty() || name.size() > 80 || size < 44 ||
+          name.find_first_not_of("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_") != std::string::npos) continue;
+      result.push_back({name, {nullptr, 0, size, 0}});
+    }
+    for (auto& movie : result) movie.entry.name = movie.name.c_str();
+    return result;
+  }();
+  return entries;
+}
 
 // From movielistu.x360.bin (one pack, movieu.x360.bin), in pack order.
 constexpr LrMovieEntry kLrMovies[] = {
@@ -810,14 +835,19 @@ bool x2_jp_audio_play(const std::filesystem::path& wav) {
 }
 
 // BinkOpen of a known movie: use the Japanese audio for it if there is one.
-void x2_jp_audio_open(uint32_t bink, const char* name) {
-  if (X2VoiceAtStart() != 1) return;
-  std::filesystem::path wav = x2_jp_movie_dir() / (std::string(name) + ".wav");
+void x2_jp_audio_open(uint32_t bink, const char* name, bool steam = false) {
+  if (!steam && X2VoiceAtStart() != 1) return;
+  std::filesystem::path wav = (steam ? X2InstallDir() / "movies_steam" : x2_jp_movie_dir()) /
+                              (std::string(name) + ".wav");
   std::error_code ec;
+  if (steam && X2VoiceAtStart() == 1) {
+    const auto japanese = X2InstallDir() / "movies_steam" / (std::string(name) + "_jp.wav");
+    if (std::filesystem::exists(japanese, ec)) wav = japanese;
+  }
   if (!std::filesystem::exists(wav, ec)) return;
   std::lock_guard<std::mutex> lock(g_jp_audio_mutex);
   g_jp_audio[bink] = X2JpMovieAudio{name, wav, false};
-  REXLOG_INFO("XIII-2 movie audio: {} plays the Japanese audio ({})", name, wav.string());
+  REXLOG_INFO("XIII-2 movie audio: {} plays {} ({})", name, steam ? "Steam movie audio" : "Japanese audio", wav.string());
 }
 
 bool x2_jp_audio_muted(uint32_t bink) {
@@ -900,7 +930,18 @@ REX_HOOK_RAW(sub_82C36D38) {
   // Which movie: XIII-2 opens movies by file code (the low 32 bits of the name's second
   // part; the top bit is a flag), else by the file size, which HBINK holds in one of its first words.
   const LrMovieEntry* match = nullptr;
+  bool steam = false;
+  for (const auto& movie : x2_steam_movies()) {
+    for (uint32_t word = 0; word < 32 && !match; ++word) {
+      const uint32_t value = lr_load_be32(base, bink + word * 4);
+      if (value + 16 >= movie.entry.size && value <= movie.entry.size + 16) {
+        match = &movie.entry;
+        steam = true;
+      }
+    }
+  }
   for (const auto& m : kLrMovies) {
+    if (match) break;
     if (m.code == uint32_t(offset)) match = &m;
   }
   for (size_t k = 0; !match && k < std::size(kLrMovies); ++k) {
@@ -915,9 +956,10 @@ REX_HOOK_RAW(sub_82C36D38) {
                 width, height, frames);
     return;
   }
-  x2_jp_audio_open(bink, match->name);
-  if (lr_movie_dir().empty()) return;
-  std::filesystem::path file = lr_movie_dir() / (std::string(match->name) + ".mp4");
+  x2_jp_audio_open(bink, match->name, steam);
+  if (!steam && lr_movie_dir().empty()) return;
+  std::filesystem::path file = (steam ? X2InstallDir() / "movies_steam" : lr_movie_dir()) /
+                                (std::string(match->name) + ".mp4");
   std::error_code ec;
   if (!std::filesystem::exists(file, ec)) {
     REXLOG_INFO("LR movie: {} - no PS3 file {}; playing the 360 video", match->name, file.string());
@@ -928,7 +970,8 @@ REX_HOOK_RAW(sub_82C36D38) {
   auto session = std::make_shared<LrMovieSession>();
   session->movie = std::make_unique<LrPs3Movie>(match->name, file, width, visible, fps);
   session->movie->Start();
-  REXLOG_INFO("LR movie: {} ({}x{}, {} frames, {:.3f} fps) -> PS3 video {}", match->name, width, height, frames, fps,
+  REXLOG_INFO("LR movie: {} ({}x{}, {} frames, {:.3f} fps) -> {} video {}", match->name, width, height, frames, fps,
+              steam ? "Steam" : "PS3",
               file.string());
   g_lr_movie_trace.name.store(match->name, std::memory_order_relaxed);
   g_lr_movie_trace.open.store(true, std::memory_order_relaxed);
@@ -1075,7 +1118,7 @@ REX_HOOK_RAW(sub_82C37930) {
 
 
 // ---- DLC movies the installed package does not have ------------------------------------------
-// The converted Steam DLC has no file for the five Bundle Pack movies the Steam version lacks
+// The converted Steam DLC currently lacks five Bundle Pack movies indexed in Steam's movie_win/
 // (tm_tevb_050: Sazh's cockpit scene, tm_vazb_013 / 038, em_vazb_030 / 055). A cutscene that plays
 // one (ev_cszb_011) never opened it, so its end clip never ran and the game stayed in movie mode:
 // no 3D drawn, black from then on. The game's own movie_disable option (byte 82C78AFC, set from

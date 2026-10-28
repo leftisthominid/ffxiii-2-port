@@ -24,6 +24,7 @@
 #include <rex/system/kernel_state.h>
 #include <rex/system/xmemory.h>
 #include <rex/thread/mutex.h>
+#include "x2_audio_pool.h"
 
 #if defined(_M_X64) || defined(__x86_64__)
 #include <immintrin.h>
@@ -757,6 +758,8 @@ REX_HOOK_RAW(sub_829116D0) {
 // The engine's heaps as they are created (kind, size, where), for the log.
 REX_EXTERN(__imp__sub_828A2878);
 REX_HOOK_RAW(sub_828A2878) {
+  const uint32_t audio_size = X2AudioPoolBytes(uint32_t(ctx.lr), ctx.r4.u32);
+  if (audio_size != ctx.r4.u32) ctx.r4.u64 = audio_size;
   const uint32_t kind = ctx.r3.u32, size = ctx.r4.u32, at = ctx.r5.u32;
   __imp__sub_828A2878(ctx, base);
   static std::atomic<int> n{0};

@@ -5,7 +5,7 @@
 #   <userdata>\0000000000000000\53510806\00000002\<name>\filelist_pNNNNNNN{img,scr}_u.x360.bin,
 #       white_pNNNNNNN{img,scr}_u.x360.bin, identifier ("NNNNNNN\0\0")
 #   <userdata>\0000000000000000\53510806\Headers\00000002\<name>.header
-import os, struct, shutil, time
+import os, struct, shutil, time, tempfile, uuid
 from . import archive
 
 TITLE = 0x53510806
@@ -54,17 +54,41 @@ def install(src_dir, userdata, name, display, log=print):
     root = os.path.join(userdata, '0000000000000000', '53510806')
     dest = os.path.join(root, '00000002', name)
     heads = os.path.join(root, 'Headers', '00000002')
-    if os.path.exists(dest) and name.startswith('XIII2SteamDLC'):
-        shutil.rmtree(dest)             # an earlier converted package: made again from the Steam files
-    if os.path.exists(dest):
-        bak = os.path.join(userdata, '..', 'save_backups', 'dlc-' + time.strftime('%Y%m%d-%H%M%S'), name)
-        os.makedirs(os.path.dirname(bak), exist_ok=True)
-        shutil.move(dest, bak)
-        log(f'  the earlier {name} moved to {os.path.normpath(bak)}')
-    shutil.copytree(src_dir, dest)
-    os.makedirs(heads, exist_ok=True)
-    with open(os.path.join(heads, name + '.header'), 'wb') as f:
-        f.write(header(name, display))
+    # Finish copying before replacing the installed package. A failed copy or
+    # header write must not remove the version the player already has.
+    staging = os.path.join(userdata, '..', 'work', 'steamdlc', 'install-staging')
+    os.makedirs(staging, exist_ok=True)
+    temp = tempfile.mkdtemp(prefix='package-', dir=staging)
+    new = os.path.join(temp, 'new')
+    old = None
+    placed = False
+    headtemp = None
+    try:
+        shutil.copytree(src_dir, new)
+        os.makedirs(os.path.dirname(dest), exist_ok=True)
+        os.makedirs(heads, exist_ok=True)
+        headtemp = os.path.join(heads, name + '.header.' + uuid.uuid4().hex + '.new')
+        with open(headtemp, 'wb') as stream: stream.write(header(name, display))
+        if os.path.exists(dest):
+            if name.startswith('XIII2SteamDLC'):
+                old = os.path.join(temp, 'old')
+            else:
+                old = os.path.join(userdata, '..', 'save_backups',
+                                   'dlc-' + time.strftime('%Y%m%d-%H%M%S') + '-' + uuid.uuid4().hex[:8], name)
+                os.makedirs(os.path.dirname(old), exist_ok=True)
+            os.replace(dest, old)
+        os.replace(new, dest)
+        placed = True
+        os.replace(headtemp, os.path.join(heads, name + '.header'))
+        if old and not name.startswith('XIII2SteamDLC'):
+            log(f'  the earlier {name} moved to {os.path.normpath(old)}')
+    except Exception:
+        if placed: shutil.rmtree(dest)
+        if old and os.path.exists(old): os.replace(old, dest)
+        raise
+    finally:
+        if headtemp and os.path.exists(headtemp): os.remove(headtemp)
+        shutil.rmtree(temp, ignore_errors=True)
     return dest
 
 def installed(userdata):
@@ -75,7 +99,7 @@ def installed(userdata):
         for n in os.listdir(root):
             p = os.path.join(root, n, 'identifier')
             if os.path.exists(p):
-                out[open(p, 'rb').read()[:7].decode('latin1')] = n
+                with open(p, 'rb') as stream: out[stream.read()[:7].decode('latin1')] = n
     return out
 
 class Reuse:
@@ -96,7 +120,7 @@ class Reuse:
         self.ents = {e[5]: e for e in ents}
         self.f = open(wh, 'rb')
         if os.path.exists(kp):
-            self.keys = json.load(open(kp))
+            with open(kp) as stream: self.keys = json.load(stream)
             self.bootstrap = None
     def get(self, path, key):
         e = self.ents.get(path)

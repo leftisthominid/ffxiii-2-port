@@ -18,7 +18,7 @@ $script:X2DlcNpSha = '0d30c543f02e84e92c4b1f415b7c6b5326cbe45ee7882b6b77db7195fb
 # Bumped when the converter changes what it learns (base_data.pkl is made again).
 $script:X2DlcLearnVersion = '5'
 # Bumped when what dlcknown finds changes (dlc_known.pkl is made again).
-$script:X2DlcKnownVersion = '2'
+$script:X2DlcKnownVersion = '5'
 
 function Get-X2DlcFile([string]$url, [string]$sha, [string]$file) {
   if ((Test-Path -LiteralPath $file) -and (Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash -eq $sha) { return }
@@ -115,7 +115,7 @@ function Invoke-X2SteamDlc([string]$mode, [string]$game, [string]$tuDir, [string
   $dk = Join-Path $work 'dlc_known.pkl'
   $dkStamp = Join-Path $work 'dlc_known_version.txt'
   $dkWant = "$($script:X2DlcLearnVersion) $($script:X2DlcKnownVersion)"
-  if (-not (Test-Path -LiteralPath $dk) -or -not (Test-Path -LiteralPath $dkStamp) -or (Get-Content -LiteralPath $dkStamp -TotalCount 1) -ne $dkWant) {
+  if (-not (Test-Path -LiteralPath (Join-Path $work 'steam_manifest.json')) -or -not (Test-Path -LiteralPath $dk) -or -not (Test-Path -LiteralPath $dkStamp) -or (Get-Content -LiteralPath $dkStamp -TotalCount 1) -ne $dkWant) {
     Say '  finding the DLC files the base game already has (a few minutes)'
     $rc = Invoke-X2Dlc $py @('dlcknown', '--x360', $game, '--tu', $tuDir, '--steam', $steam, '--work', $work) (Join-Path $logs 'steamdlc_dlcknown.log')
     if ($rc -ne 0) { throw "Finding the base-game DLC files failed; see $logs\steamdlc_dlcknown.log" }
@@ -134,6 +134,17 @@ function Invoke-X2SteamDlc([string]$mode, [string]$game, [string]$tuDir, [string
     $rc = Invoke-X2Dlc $py @('export', '--x360', $game, '--tu', $tuDir, '--steam', $steam, '--work', $work, '--userdata', $userdata, '--out', $dl) (Join-Path $logs 'steamdlc_export.log')
     if ($rc -ne 0) { throw "The shader export failed; see $logs\steamdlc_export.log" }
   } elseif ($mode -eq 'install') {
+    Say '  refreshing the Steam-derived content inventory'
+    $rc = Invoke-X2Dlc $py @('plan', '--x360', $game, '--tu', $tuDir, '--steam', $steam, '--work', $work) (Join-Path $logs 'steamdlc_inventory.log')
+    if ($rc -ne 0) { throw "Steam inventory failed; see $logs\steamdlc_inventory.log" }
+    Say '  decoding full Steam DLC movies and audio (prepared movies are reused)'
+    $movieOut = Join-Path $out 'run\movies_steam'
+    $rc = Invoke-X2Dlc $py @('movies', '--x360', $game, '--tu', $tuDir, '--steam', $steam, '--work', $work, '--out', $movieOut, '--ffmpeg', $ffmpeg) (Join-Path $logs 'steamdlc_movies.log')
+    if ($rc -ne 0) { throw "Steam movie preparation failed; see $logs\steamdlc_movies.log" }
+    Say '  converting and installing the Steam DLC (files unchanged since the last build are reused)'
+    # Reuse only files whose conversion keys still match, including the audio headers.
+    $rc = Invoke-X2Dlc $py @('build', '--steam', $steam, '--work', $work, '--out', (Join-Path $work 'packages'), '--userdata', $userdata, '--install', '--replace', '--ffmpeg', $ffmpeg) (Join-Path $logs 'steamdlc_build.log')
+    if ($rc -ne 0) { throw "The conversion failed; see $logs\steamdlc_build.log" }
     # the 360 packages of the same DLC aside, so the game takes the converted ones
     $bak = Join-Path $out ("save_backups\dlc360-{0}" -f (Get-Date -Format 'yyyyMMdd-HHmmss'))
     $moved = Join-Path $work 'moved_360_packages.txt'
@@ -150,11 +161,6 @@ function Invoke-X2SteamDlc([string]$mode, [string]$game, [string]$tuDir, [string
       Add-Content -LiteralPath $moved -Value "$($d.Name)`t$bak"
       Say "  360 package $($d.Name) (DLC $id) moved to $bak (-SteamDlc restore puts it back)"
     }
-    Say '  converting and installing the Steam DLC (files unchanged since the last build are reused)'
-    # (--reuse-sound: a last build from before the reuse keys keeps its sound files once; the
-    # sound code is the same)
-    $rc = Invoke-X2Dlc $py @('build', '--steam', $steam, '--work', $work, '--out', (Join-Path $work 'packages'), '--userdata', $userdata, '--install', '--reuse-sound', '--ffmpeg', $ffmpeg) (Join-Path $logs 'steamdlc_build.log')
-    if ($rc -ne 0) { throw "The conversion failed; see $logs\steamdlc_build.log" }
   }
   # the report
   $rep = Join-Path $work 'report'

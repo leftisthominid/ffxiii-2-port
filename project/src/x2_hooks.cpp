@@ -75,6 +75,8 @@ REX_HOOK_RAW(sub_828510C8) {
 #include <rex/logging/macros.h>
 #include <rex/system/kernel_state.h>
 #include <rex/system/xmemory.h>
+#include "x2_module_paths.h"
+#include "x2_audio_pool.h"
 
 namespace {
 uint32_t x2_be32(uint8_t* base, uint32_t address) {
@@ -103,6 +105,44 @@ std::string x2_wstr(uint8_t* base, uint32_t p, size_t max) {
 
 bool x2_log_slot(std::atomic<uint32_t>& count) { return count.fetch_add(1) < 64; }
 }  // namespace
+
+// LoadLibraryA / LoadLibraryEx wrappers: preserve their flags and return values,
+// changing only the spelling of the four statically recompiled zone paths.
+// The runtime can then unregister and unload the old module through its normal
+// XexUnloadImage path, including DllMain and thunk-cache cleanup.
+REX_EXTERN(__imp__sub_82B63F90);
+REX_EXTERN(__imp__sub_82B63FD8);
+namespace {
+void x2_load_module(PPCContext& ctx, uint8_t* base, PPCFunc* original) {
+  const std::string requested = x2_cstr(base, ctx.r3.u32, 512);
+  auto* kernel = REX_KERNEL_STATE();
+  const std::string resolved = X2ModuleLoadPath(kernel, requested);
+  if (resolved == requested) { original(ctx, base); return; }
+  const uint32_t guest = kernel->memory()->SystemHeapAlloc(uint32_t(resolved.size() + 1));
+  if (!guest) { original(ctx, base); return; }
+  struct Release {
+    rex::memory::Memory* memory;
+    uint32_t guest;
+    ~Release() { memory->SystemHeapFree(guest); }
+  } release{kernel->memory(), guest};
+  std::memcpy(base + guest, resolved.c_str(), resolved.size() + 1);
+  REXLOG_INFO("XIII-2 zone module: {} -> {} (matching load/unload identity)", requested, resolved);
+  ctx.r3.u64 = guest;
+  original(ctx, base);
+}
+}  // namespace
+REX_HOOK_RAW(sub_82B63F90) { x2_load_module(ctx, base, __imp__sub_82B63F90); }
+REX_HOOK_RAW(sub_82B63FD8) { x2_load_module(ctx, base, __imp__sub_82B63FD8); }
+
+REX_EXTERN(__imp__sub_82A0E3F0);
+REX_HOOK_RAW(sub_82A0E3F0) {
+  const uint32_t bytes = X2AudioPoolBytes(uint32_t(ctx.lr), ctx.r3.u32);
+  if (bytes != ctx.r3.u32) {
+    REXLOG_INFO("XIII-2 audio: Ogg input-buffer pool {} -> {} bytes", ctx.r3.u32, bytes);
+    ctx.r3.u64 = bytes;
+  }
+  __imp__sub_82A0E3F0(ctx, base);
+}
 
 // XamContentCreateEx(user r3, root name r4, XCONTENT_DATA* r5, flags r6, disposition* r7,
 // license* r8, ...); XCONTENT_DATA: +0 device id, +4 content type, +264 file name[42].

@@ -10,7 +10,7 @@
 # both sides as anchors, longest increasing run, recursively; O(n log n)): difflib was quadratic on
 # the large, repetitive members (minutes per file). This is a heuristic, not a parser; its
 # leave-one-out accuracy on the Yuna data is measured by verify.py.
-import bisect, struct
+import bisect, struct, zlib
 
 SIZES = (4, 2, 1)          # 1 = two single bytes (kept), 2 = u16, 4 = u32 (both reversed)
 
@@ -97,7 +97,8 @@ def align(a, b):
 
 def sketch(b, k=256):
     """bottom-k hash sketch of the 4-byte words (cheap similarity prefilter)"""
-    hs = {hash(b[i:i + 4]) for i in range(0, len(b) - 3, 4)}
+    # Built-in bytes hashes vary by process, changing the chosen examples in spawned workers.
+    hs = {zlib.crc32(b[i:i + 4]) for i in range(0, len(b) - 3, 4)}
     return frozenset(sorted(hs)[:k])
 
 def words(b):

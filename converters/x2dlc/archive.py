@@ -136,7 +136,11 @@ def unpack(filelist, white, out_dir):
 
 
 def read_list(path_or_bytes):
-    raw = open(path_or_bytes, 'rb').read() if isinstance(path_or_bytes, str) else path_or_bytes
+    if isinstance(path_or_bytes, (str, os.PathLike)):
+        with open(path_or_bytes, 'rb') as stream:
+            raw = stream.read()
+    else:
+        raw = path_or_bytes
     plain, ok = wf.decrypt(raw)
     if not ok: raise ValueError('filelist checksum mismatch')
     return parse_plain(plain)

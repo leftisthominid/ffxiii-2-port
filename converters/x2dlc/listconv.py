@@ -1,7 +1,7 @@
 # The conversion of one list of a package (the files' order, texture files with their owners),
 # used by the build in this process and by its worker processes (convert_list: the models and
 # bundles of a list are converted in parallel, each owner with its texture files in one worker).
-import os, re, sys
+import os, re, sys, traceback
 from . import gameindex, texture
 
 class ListConverter:
@@ -38,6 +38,16 @@ class ListConverter:
             key = gameindex.norm(path)
             pc = S.read(key)
             if pc is None:
+                alternate = 'movie_win/' + key[6:] if key.startswith('movie/') else None
+                if alternate and alternate in S.files:
+                    folder = getattr(conv, 'movie_dir', None)
+                    transport = os.path.join(folder, os.path.basename(key)) if folder else None
+                    if transport and os.path.isfile(transport):
+                        with open(transport, 'rb') as stream: data = stream.read()
+                        if data[:3] != b'BIK': raise ValueError('invalid prepared movie transport')
+                        conv.note('Steam movie (decoded overlay with verified Bink transport)')
+                        return data
+                    raise NotImplementedError(f'Steam movie is indexed at {alternate}; run the movies command before building packages')
                 raise FileNotFoundError('not in the Steam version')
             comp = None
             if not path.endswith('.imgb'):
@@ -101,8 +111,9 @@ def worker_init(work, steam, ffmpeg):
     else:
         S = gameindex.SampleIndex(steam)
     conv = convert.Converter(data, log=lambda *a: None, ffmpeg=ffmpeg)
+    conv.movie_dir = os.path.join(work, 'movies', 'placeholders')
     conv.read_pc = S.read
-    _W.update(conv=conv, S=S, lists={})
+    _W.update(conv=conv, S=S, lists={}, work=work)
 
 def worker_run(ident, kind, todo):
     """converts the paths todo (an owner and its texture files, in list order) -> ([(path, data,
@@ -110,9 +121,8 @@ def worker_run(ident, kind, todo):
     conv, S = _W['conv'], _W['S']
     lc = _W['lists'].get((ident, kind))
     if lc is None:
-        import gzip, json
-        with gzip.open(os.path.join(os.path.dirname(__file__), 'data', 'manifests.json.gz'), 'rt') as f:
-            mf = json.load(f)
+        from . import manifest
+        mf = manifest.load(_W['work'])
         files = next([tuple(x) for x in l['files']] for l in mf[ident]['lists'] if l['kind'] == kind)
         lc = _W['lists'][(ident, kind)] = ListConverter(conv, S, files)
     before = dict(conv.stats)
@@ -121,7 +131,7 @@ def worker_run(ident, kind, todo):
         try:
             out.append((p, lc.one(p), None))
         except Exception as ex:
-            out.append((p, b'', f'{type(ex).__name__}: {ex}'))
+            out.append((p, b'', f'{type(ex).__name__}: {ex}\n' + traceback.format_exc(limit=12)))
     lc.made.clear(); lc.early.clear()
     added = {k: v - before.get(k, 0) for k, v in conv.stats.items() if v != before.get(k, 0)}
     return out, added
