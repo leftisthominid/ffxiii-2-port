@@ -462,6 +462,131 @@ def convert(pc, x, kb):
 def learn_all(pairs, log=None):
     return masks(learn_counts(pairs, log))
 
+def contextual_layout(d):
+    """Distinguish classes that happen to have the same size and pointer fields.
+
+    A leaf contains two different eight-byte classes with a pointer at zero.
+    One has two u16 fields after the pointer; the other has a u32. Pooling them
+    erases the evidence for both. Their positions in the type schema distinguish
+    them without depending on resource names, array counts, or DLC samples.
+    """
+    L = layout(d)
+    if L is None: return
+    groups, schema, pos = [], [], 0
+    for i in range(L['ntypes']):
+        nb = struct.unpack_from('<I', d, L['types'] + 16 * i + 4)[0]
+        group = L['inst'][pos:pos + nb]
+        pos += nb
+        groups.append(group)
+        schema.append(group[0][0] if group else None)
+    schema = tuple(schema)
+    for i, group in enumerate(groups):
+        for sig, base, count in group:
+            yield (sig, i, schema), base, count
+
+def fix_curves(pc, x):
+    """Effect curve records: {u8 mode, u8 components, u16 zero, floats[]}.
+
+    Modes 0/1/2 store one/two/three floats per component. A target must
+    consist entirely of valid records before any bytes are changed. Float
+    values are retained from Steam, including authored platform differences.
+    """
+    L = layout(pc)
+    if L is None: return x, 0
+    out, count = bytearray(x), 0
+    for target, length, keys in _targets(pc, L):
+        if keys[0][0] != (4, ((0, 0),)): continue
+        end, at, records = target + length, target, []
+        while at + 4 <= end:
+            mode, components, z0, z1 = pc[at:at + 4]
+            if mode > 2 or not 1 <= components <= 4 or z0 or z1: break
+            size = 4 + 4 * (mode + 1) * components
+            if at + size > end: break
+            records.append((at, size))
+            at += size
+        if at != end: continue
+        for at, size in records:
+            out[at:at + 4] = pc[at:at + 4]
+            for word in range(at + 4, at + size, 4): out[word:word + 4] = pc[word:word + 4][::-1]
+            count += 1
+    return bytes(out), count
+
+def learn_contexts(pairs):
+    counts = {}
+    for pc, x in pairs:
+        if len(pc) != len(x): continue
+        candidates = _cands_np(pc, x)
+        for key, base, count in contextual_layout(pc):
+            size = key[0][0]
+            if size % 2 or base % 2 or base + count * size > len(pc): continue
+            _count(counts, key, size // 2, candidates, base // 2, count * (size // 2))
+    return masks(dict(blocks=counts, targets={}))['blocks']
+
+def property_targets(pc, L):
+    """32-byte property payloads, distinguished by the serialized field tag.
+
+    The same pointer class carries strings and numeric records. Its word
+    after the payload pointer, together with its type schema, distinguishes
+    variants; it is not a byte count.
+    Shared targets with conflicting tags keep the existing conversion.
+    """
+    signature = (36, ((24, 0), (0, 0), (8, 0), (16, 0)))
+    tags = {}
+    for (sig, position, schema), base, count in contextual_layout(pc):
+        if sig != signature: continue
+        for i in range(count):
+            at = base + i * sig[0] + 24
+            if at + 8 > len(pc): continue
+            offset, tag = struct.unpack_from('<II', pc, at)
+            tags.setdefault(R + offset, set()).add((tag, position, schema))
+    for target, length, keys in _targets(pc, L):
+        if keys[0][:2] == (signature, 24) and length == 32 and len(tags.get(target, ())) == 1:
+            yield target, length, [(signature, 24, 'variant', (next(iter(tags[target])), length))]
+
+def learn_property_targets(pairs):
+    counts = {}
+    for pc, x in pairs:
+        if len(pc) != len(x): continue
+        L = layout(pc)
+        if L is None: continue
+        candidates = None
+        for target, length, keys in property_targets(pc, L):
+            if candidates is None: candidates = _cands_np(pc, x)
+            _count(counts, keys[0], length // 2, candidates, target // 2, length // 2)
+    # Zero/symmetric examples cannot choose a byte order. Those halfwords
+    # keep the existing conversion, rather than preferring a guessed u32.
+    return {key: [m if m in (1, 2, 4) else 0 for m in mask]
+            for key, mask in masks(dict(blocks={}, targets=counts))['targets'].items()}
+
+def apply_property_targets(pc, x, kb):
+    L = layout(pc)
+    if L is None or not kb: return x
+    out = bytearray(x)
+    for target, length, keys in property_targets(pc, L):
+        mask = kb.get(keys[0])
+        if mask is None: continue
+        half = 0
+        while half < length // 2:
+            at = target + 2 * half
+            choice = mask[half]
+            if choice == 4 and half % 2 == 0 and half + 1 < len(mask) and mask[half + 1] == 4:
+                out[at:at + 4] = pc[at:at + 4][::-1]
+                half += 2
+                continue
+            if choice == 2: out[at:at + 2] = pc[at:at + 2][::-1]
+            elif choice == 1: out[at:at + 2] = pc[at:at + 2]
+            half += 1
+    return bytes(out)
+
+def apply_contexts(pc, x, contexts):
+    for key, base, count in contextual_layout(pc):
+        mask = contexts.get(key)
+        if mask is None: continue
+        sig = key[0]
+        x, _, _ = apply(pc, x, {sig: mask},
+                        lay=lambda _: dict(inst=[(sig, base, count)]))
+    return x
+
 def self_check(pairs, oracle, samples=4, seed=1, max_bytes=16384, log=print, seconds=180):
     """leave-one-out on PC/360 pairs: each sampled file converted with the oracle and the layouts
     learned without it -> dict(sampled, exact, wrong_bytes, total_bytes, learned_only_wrong_bytes)"""

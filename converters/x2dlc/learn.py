@@ -13,9 +13,23 @@ PAIR_KINDS = ('trb', 'mpk', 'xfv', 'xwb', 'xwp', 'xgr', 'scd', 'wpd', 'vinsbin',
 MAX_PAIRS = 400            # per member kind
 MAX_PAIR_BYTES = 24 << 20  # per member kind
 MAX_KNOWN_BYTES = 300 << 20
-MCB_BUNDLES = 160          # base-game motion bundles read for their motion blocks (spread over mot/)
-MCB_PAIRS = 8000
-MCB_BYTES = 16 << 20
+MOTION_BUNDLES = 120       # each of monster, character, and remaining base-game motion bundles
+MOTION_PAIRS = 10000
+MOTION_BYTES = 32 << 20    # PC and 360 bytes together
+
+def motion_paths(keys):
+    """Cover monsters first, then characters, then the remaining base-game motion sets.
+
+    Inputs are the disc/title-update and Steam index intersection, never installed DLC.
+    Keep this deterministic so a diagnostic collection can reproduce the learned corpus.
+    """
+    keys = sorted(k for k in keys if k.startswith('mot/') and k.endswith('.white.bin'))
+    pick = []
+    for prefix in ('mot/mon/', 'mot/pc/', 'mot/'):
+        candidates = [k for k in keys if k.startswith(prefix) and k not in pick]
+        step = max(1, len(candidates) // MOTION_BUNDLES)
+        pick.extend(candidates[::step][:MOTION_BUNDLES])
+    return pick
 
 def md5(b):
     return hashlib.md5(b).digest()
@@ -180,17 +194,22 @@ def dlc_known(x360_root, tu_dir, steam_root, work, log=print):
     path, all of them (md5 of the PC member -> 360 member): the known table of learn() stops at
     MAX_KNOWN_BYTES, and members past it are converted as new. Also motion blocks to learn from.
     Saved as dlc_known.pkl."""
-    import gzip, json
+    from . import manifest
     t0 = last = time.time()
-    with gzip.open(os.path.join(os.path.dirname(__file__), 'data', 'manifests.json.gz'), 'rt') as f:
-        mf = json.load(f)
     X = gameindex.GameIndex(x360_root, 'x360', update=tu_dir, log=log)
     S = gameindex.GameIndex(steam_root, 'win32', log=log)
+    inventory = manifest.build(S, X, log=log)
+    manifest.save(inventory, work)
+    mf = inventory['packs']
+    log(f'Steam-derived overlay: {inventory["provenance"]["selected"]} assets; no Xbox DLC metadata used')
     paths = sorted({gameindex.norm(f[2]) for m in mf.values() for l in m['lists'] for f in l['files']
                     if f[2].rsplit('.', 1)[-1] in ('xfv', 'xwb', 'xwp', 'xgr') or f[2].endswith('.white.x360.bin')})
     paths = [k for k in paths if k in X.files and k in S.files]
     log(f'DLC bundles also in the base game: {len(paths)}')
     known, st = {}, collections.Counter()
+    def by_name(ents):
+        c = collections.Counter((a, b) for a, b, _ in ents)
+        return {(a, b): d for a, b, d in ents if c[(a, b)] == 1}
     for n, k in enumerate(paths):
         if time.time() - last >= 10:
             last = time.time()
@@ -203,9 +222,6 @@ def dlc_known(x360_root, tu_dir, steam_root, work, log=print):
         except Exception:
             st['unreadable'] += 1; continue
         # the members by name and kind (names that are in a bundle once)
-        def by_name(ents):
-            c = collections.Counter((a, b) for a, b, _ in ents)
-            return {(a, b): d for a, b, d in ents if c[(a, b)] == 1}
         bp, bx = by_name(ep), by_name(ex)
         for nk, a in bp.items():
             b = bx.get(nk)
@@ -215,31 +231,45 @@ def dlc_known(x360_root, tu_dir, steam_root, work, log=print):
     # motion control blocks (mcb) of the base game's motion bundles: learn() keeps the first 400
     # mcb pairs it meets, all from the event folders (before mot/), and the monster and character
     # motion blocks have chunks those do not (Sazh's motions in Heads or Tails are a monster set)
-    dlc = {gameindex.norm(f[2]) for m in mf.values() for l in m['lists'] for f in l['files']}
-    mot = sorted(k for k in X.files if k.startswith('mot/') and k.endswith('.white.bin') and k not in dlc and k in S.files)
-    step = max(1, len(mot) // MCB_BUNDLES)
-    pick = sorted(mot[::step], key=lambda k: md5(k.encode()))   # (in a mixed order: the caps below)
-    mcb_pairs, size = [], 0
+    pick = motion_paths(set(X.files) & set(S.files))
+    motion_pairs, size, count = dict(mcb=[], acb=[]), 0, 0
     for n, k in enumerate(pick):
         if time.time() - last >= 10:
             last = time.time()
-            log(f'  motion bundles: {n} of {len(pick)} ({last - t0:.0f} s): {len(mcb_pairs)} motion blocks')
-        if len(mcb_pairs) >= MCB_PAIRS or size >= MCB_BYTES: break
+            log(f'  motion bundles: {n} of {len(pick)} ({last - t0:.0f} s): {count} motion/action blocks')
+        if count >= MOTION_PAIRS or size >= MOTION_BYTES: break
         try:
             p, x = S.read(k), X.read(k)
             if not p or not x or p[:4] != b'WPD\0' or x[:4] != b'WPD\0': continue
             ep, ex = wpd.read(p), wpd.read(x)
         except Exception:
             st['motion bundles unreadable'] += 1; continue
-        if [(a, b) for a, b, _ in ep] != [(a, b) for a, b, _ in ex]: continue
-        for (name, e, a), (_, _, b) in zip(ep, ex):
-            if e.rstrip(b'\0') == b'mcb' and a != b and len(a) == len(b):
-                mcb_pairs.append((a, b)); size += len(a)
-    st['motion blocks from the base game'] = len(mcb_pairs)
+        bx = by_name(ex)
+        for (name, e), a in by_name(ep).items():
+            kind = e.rstrip(b'\0').decode('ascii', errors='replace')
+            b = bx.get((name, e))
+            if kind not in motion_pairs or b is None or len(a) != len(b): continue
+            if count >= MOTION_PAIRS or size + len(a) + len(b) > MOTION_BYTES: break
+            motion_pairs[kind].append((a, b)); size += len(a) + len(b); count += 1
+    st['motion blocks from the base game'] = len(motion_pairs['mcb'])
+    st['action blocks from the base game'] = len(motion_pairs['acb'])
+    # The first 400 embedded `vins` members fill learn()'s sample before it
+    # reaches scene/*.vinsbin. Root files use different scalar fields, so keep
+    # their matching disc/Steam examples separately. Only base-disc/TU data is
+    # read, including when the target casino file exists only in Steam.
+    roots = []
+    for key in sorted(k for k in set(X.files) & set(S.files) if k.endswith('.vinsbin')):
+        try:
+            p, x = S.read(key), X.read(key)
+            if p and x and len(p) == len(x) and p[:4] == x[:4] == b'SEDB': roots.append((p, x))
+        except Exception:
+            st['scene instance files unreadable'] += 1
+    motion_pairs['vinsbin'] = roots
+    st['root scene instance examples'] = len(roots)
     X.close(); S.close()
     with open(os.path.join(work, 'dlc_known.pkl'), 'wb') as f:
-        pickle.dump(dict(known=known, pairs=dict(mcb=mcb_pairs)), f, protocol=4)
-    log(f'DLC members from the base game: {len(known)}, motion blocks to learn from: {len(mcb_pairs)} '
+        pickle.dump(dict(known=known, pairs=motion_pairs), f, protocol=4)
+    log(f'DLC members from the base game: {len(known)}, motion/action blocks to learn from: {count} '
         f'in {time.time() - t0:.0f} s ({dict(st)})')
 
 def load(work):

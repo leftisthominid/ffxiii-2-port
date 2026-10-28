@@ -8,7 +8,7 @@
 #              from base-game pairs; reported per file as 'learned'
 #   re-encoded sound: MS-ADPCM -> Ogg Vorbis (the 360 has XMA2, which cannot be made here)
 import hashlib, struct, threading, time
-from . import model, wpd, texture, qix, learned, sound, vmdl, scb, mcb
+from . import model, wpd, texture, qix, learned, sound, vmdl, scb, mcb, ccb
 from .util import align
 
 SAME_KINDS = ('.ztr', '.clb', '.wdb', '.dat', '.wpb', '.bik', '.txt')
@@ -25,7 +25,7 @@ def kind(path):
     if n.endswith('.scd'): return 'scd'
     if n.endswith('.wpd') and path.startswith('sound/'): return 'soundpack'
     if n.endswith(('.xfv', '.xwb', '.xwp', '.xgr')) or n.endswith('.white.x360.bin') or n.endswith('.white.win32.bin'): return 'bundle'
-    if n.endswith('.vinsbin'): return 'single'
+    if n.endswith(('.vinsbin', '.lyb')): return 'single'
     if n.endswith(SAME_KINDS): return 'same'
     if n.endswith('.bin') and '.x360.' not in n and '.win32.' not in n: return 'same'
     return 'unknown'
@@ -73,14 +73,15 @@ def guess_all(pc):
 
 def cut_member_fix(e, pc, y):
     """the cutscene data members (event DataSet bundles), after the learned words:
-    mcb: the resource names (16-character effect ids) stay as text;
+    mcb/acb: resource names stay as text; binary record payloads do not;
     ccb: camera curves - the embedded motion table (after '@FCMT', its size there) is the same
     bytes on the 360, and the SEDB byte 0xC is 0 (all 22 members of ev_cszb_010)"""
     y = bytearray(y)
-    if e == b'mcb':
-        # (not the chunk tags and their lengths: '@BLK' then a length byte of 0x2b reads as text)
-        for w in scb.text_words(pc) - mcb.header_words(pc):
+    if e in (b'mcb', b'acb'):
+        # Printable record bytes can be floats or packed fields, not names.
+        for w in scb.text_words(pc) & mcb.resource_words(pc):
             y[w:w + 4] = pc[w:w + 4]
+        return mcb.structural(pc, y)
     else:
         y[0xC] = 0
         i = 0
@@ -91,7 +92,7 @@ def cut_member_fix(e, pc, y):
             n = struct.unpack_from('<I', pc, i - 8)[0]
             n = min(n + (-n) % 4, len(pc) - i)       # through the end of its last word
             if 0x30 <= n: y[i:i + n] = pc[i:i + n]
-    return bytes(y)
+        return bytes(y)
 
 class Converter:
     def __init__(self, data, log=print, ffmpeg=None):
@@ -102,11 +103,14 @@ class Converter:
         self.known = data.get('known', {})            # md5(PC bytes) -> 360 bytes (files and members)
         self.pairs = data.get('pairs', {})            # member ext -> [(pc, 360)] (learned formats)
         self.qix_kb = None
+        self._qix_contexts = None
+        self._qix_properties = None
         self._scb = None
         self._mcb = None
+        self._acb = None
         self._layout_words = {}
         self._header_rules = {}
-        self._qix_vins = None
+        self._qix_vins = {}
         self._oracles = {}
         self.stats = {}
         self.lock = threading.Lock()
@@ -166,6 +170,13 @@ class Converter:
                 self.log(f'  mcb: chunk places learned from {self._mcb.pairs} base-game motion blocks')
             return self._mcb
 
+    def acb_learner(self):
+        with self.lock:
+            if self._acb is None:
+                self._acb = mcb.Learner()
+                for p, x in self.pairs.get('acb', []): self._acb.add(p, x)
+            return self._acb
+
     def oracle(self, ext):
         with self.lock:
             if ext not in self._oracles:
@@ -189,30 +200,62 @@ class Converter:
     def qix_for(self, ext):
         """the element layouts for a member kind: the leaf instances (vins / .vinsbin) from their
         own base-game pairs (the effect counts do not hold them), the rest from the effect data"""
-        if ext in ('vins', 'vinsbin') and len(self.pairs.get('vins', [])) >= 20:
+        if ext in ('vins', 'vinsbin') and (len(self.pairs.get('vins', [])) >= 20 or
+                (ext == 'vinsbin' and len(self.pairs.get('vinsbin', [])) >= MIN_LAYOUT_PAIRS)):
             with self.lock:
-                if self._qix_vins is None:
-                    self._qix_vins = qix.learn_all([(a, b) for a, b in self.pairs['vins'] if len(a) == len(b)])
-            return self._qix_vins
+                if ext not in self._qix_vins:
+                    kb = qix.learn_all([(a, b) for a, b in self.pairs.get('vins', []) if len(a) == len(b)])
+                    roots = self.pairs.get('vinsbin', []) if ext == 'vinsbin' else []
+                    if len(roots) >= MIN_LAYOUT_PAIRS:
+                        # Root scene-instance files and embedded effect members
+                        # reuse element sizes for different fields. The root
+                        # files need their own base-disc layout evidence.
+                        own = qix.learn_all([(a, b) for a, b in roots if len(a) == len(b)])
+                        for part in kb: kb[part].update(own[part])
+                    self._qix_vins[ext] = kb
+            return self._qix_vins[ext]
         return self.qix()
 
     def qix(self):
-        if self.qix_kb is None and self.d.get('qix_kb'):
-            self.qix_kb = self.d['qix_kb']           # counted over every base-game effect member
         if self.qix_kb is None:
             pairs = [p for e in (b'veff', b'vlea', b'vmdl', b'vtex') for p in self.pairs.get(e.decode(), [])]
-            self.qix_kb = qix.learn_all([(a, b) for a, b in pairs if len(a) == len(b)])
+            # The retained vmdl examples contain only the object, without the
+            # platform-specific shader blobs. The old aggregate mixed complete
+            # models into the counts, including data with different layouts.
+            # Rebuild covered signatures from these base-game examples. Retain
+            # aggregate knowledge only for signatures absent from the examples.
+            rebuilt = qix.learn_all([(a, b) for a, b in pairs if len(a) == len(b)])
+            old = self.d.get('qix_kb') or {}
+            self.qix_kb = {part: dict(old.get(part, {})) for part in ('blocks', 'targets')}
+            for part in self.qix_kb: self.qix_kb[part].update(rebuilt[part])
+            self.log('  effect layouts: rebuilt from retained base-game object examples')
         return self.qix_kb
+
+    def qix_contexts(self):
+        if self._qix_contexts is None:
+            self._qix_contexts = qix.learn_contexts(self.pairs.get('vlea', []))
+        return self._qix_contexts
 
     def learned_member(self, ext, pc, label):
         """field-by-field byte order, learned"""
-        if qix.exact_fit(pc) is not None:
+        if (ext in ('veff', 'vlea', 'vmdl', 'vtex') and qix.layout(pc) is not None) or qix.exact_fit(pc) is not None:
             # words no layout decides: the value rules measured on the effect data (text and byte
             # fields kept, tags reversed, floats and u16 pairs swapped)
             first = bytearray(qix.guess_effect(pc)); learned.sedb_header(pc, first)
             y, st = qix.convert(pc, bytes(first), self.qix_for(ext))
+            if ext == 'vlea':
+                y = qix.apply_contexts(pc, y, self.qix_contexts())
+            if ext == 'veff':
+                with self.lock:
+                    if self._qix_properties is None:
+                        self._qix_properties = qix.learn_property_targets(self.pairs.get('veff', []))
+                y = qix.apply_property_targets(pc, y, self._qix_properties)
+            y = qix.keep_text(pc, y, qix.layout(pc))
             y, _ = qix.fix(pc, bytes(y))           # the exact parts last
             y, _ = qix.fix_game(pc, y)
+            if ext in ('veff', 'vlea'):
+                y, curves = qix.fix_curves(pc, y)
+                if curves: self.note('effect curves (typed)', curves)
             self.note('learned (effect layouts)')
             return y
         if len(pc) <= 0x20000 and self.pairs.get(ext):
@@ -327,11 +370,17 @@ class Converter:
                 y = scb.convert(data, self.scb_learner(), header=learned.sedb_header)
                 if y is not None:
                     out.append([name, ext, y]); self.note('cutscene schedule (chunks by rule, words learned)'); continue
+            if e == b'ccb':
+                y = ccb.convert(data)
+                if y is not None:
+                    out.append([name, ext, y]); self.note('camera curves (typed container, MTB preserved)'); continue
             y = self.learned_member(e.decode(), data, path)
             if e == b'mcb' and y is not None and len(y) == len(data):
                 # the words at a chunk place where every base-game example agrees
                 y = self.mcb_learner().apply(data, y, only_sure=True)
-            if e in (b'mcb', b'ccb') and y is not None and len(y) == len(data):
+            if e == b'acb' and y is not None and len(y) == len(data):
+                y = self.acb_learner().apply(data, y, only_sure=True)
+            if e in (b'mcb', b'acb', b'ccb') and y is not None and len(y) == len(data):
                 y = cut_member_fix(e, data, y)
             out.append([name, ext, y])
         img = None

@@ -55,6 +55,28 @@ def ogg_cx_to_be(cx):
     for i in range(0x20, 0x20 + seek, 4): o[i:i + 4] = cx[i:i + 4][::-1]
     return bytes(o)
 
+def lip_to_be(d):
+    """The optional SRD lip-sync after the declared SCD body, as in x2_jpvoice.
+    Its byte-pair shapes are portable; only the size and non-final record times
+    change byte order. The SCD size continues to exclude this trailer.
+    """
+    if len(d) < 32 or d[-16:-8] != b'add srd\0': return b''
+    size = struct.unpack_from('<Q', d, 0x10)[0]
+    srd = bytearray(d[size:-16])
+    if len(srd) < 18 or srd[:3] != b'SRD' or srd[3] > 1:
+        raise ValueError('invalid SCD lip-sync trailer')
+    if struct.unpack_from('<I', srd, 4)[0] != len(srd) or struct.unpack_from('<I', d, len(d) - 4)[0] != len(srd):
+        raise ValueError('invalid SCD lip-sync size')
+    records, at = [], 18
+    while at < len(srd) and srd[at]:
+        length = srd[at]
+        if length < 4 or at + length > len(srd): raise ValueError('invalid SCD lip-sync record')
+        records.append(at + length - 2)
+        at += length
+    srd[4:8] = srd[4:8][::-1]
+    for at in records[:-1]: srd[at:at + 2] = srd[at:at + 2][::-1]
+    return bytes(srd) + b'add srd\0' + bytes(4) + struct.pack('>I', len(srd))
+
 def ogg_pages(b):
     out, i = [], 0
     while i + 27 <= len(b) and b[i:i + 4] == b'OggS':
@@ -85,16 +107,16 @@ def msadpcm_to_ogg(ent, quality=2):
     budget = max(int(len(data) * BUDGET) + 2048, 8192)   # short effect sounds: not below 8 KB
     with tempfile.TemporaryDirectory() as td:
         wi, wo = os.path.join(td, 'in.wav'), os.path.join(td, 'out.ogg')
-        open(wi, 'wb').write(wav)
+        with open(wi, 'wb') as stream: stream.write(wav)
         for rate, q in STEPS:
             try:
                 r = subprocess.run([FFMPEG, '-nostdin', '-hide_banner', '-loglevel', 'error', '-y', '-i', wi,
                                     '-ar', str(rate), '-c:a', 'libvorbis', '-q:a', q, '-map_metadata', '-1',
-                                    '-fflags', '+bitexact', '-flags:a', '+bitexact', wo], capture_output=True, text=True)
+                                    '-fflags', '+bitexact', '-flags:a', '+bitexact', '-page_duration', '500000', wo], capture_output=True, text=True)
             except FileNotFoundError:
                 raise RuntimeError('ffmpeg not found (the sound files need it)')
             if r.returncode: raise RuntimeError('ffmpeg: ' + r.stderr)
-            ogg = open(wo, 'rb').read()
+            with open(wo, 'rb') as stream: ogg = stream.read()
             if len(ogg) <= budget: break
     pages = ogg_pages(ogg)
     nh = 0
@@ -125,6 +147,12 @@ def convert(d, head_oracle, quality=2, ffmpeg=None):
     if any(e['codec'] != 6 for e in s['entries']): fixed.append((s['hs'] + 0x1C, s['hs'] + 0x20))
     head, st = head_oracle.convert(s['head'], learned.sedb_header, fixed=fixed)
     head = bytearray(head)
+    # Counts and table offsets have a known layout. Never infer these as mixed
+    # scalar fields: a u16/u32 error can point beyond the stream or request an
+    # enormous allocation. All 400 retained base-game header pairs agree.
+    learned.sedb_header(d, head)
+    hs = s['hs']
+    struct.pack_into('>4H5I', head, hs, *struct.unpack_from('<4H5I', d, hs))
     # u16 at table header + 0x1C: kept for Ogg entries (fanfare: same value on both platforms),
     # but differs for re-encoded entries with no visible relation (PC small even numbers, 360
     # other values in voices and 0 in sound-effect banks); written as 0 when re-encoding.
@@ -157,6 +185,7 @@ def convert(d, head_oracle, quality=2, ffmpeg=None):
     t2 = s['offs'][1]
     for i, o in enumerate(offs): struct.pack_into('>I', out, t2 + 4 * i, o)
     struct.pack_into('>Q', out, 0x10, len(out))
+    out += lip_to_be(d)
     return bytes(out), st
 
 def head_pairs(pairs):
