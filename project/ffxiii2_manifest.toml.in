@@ -1,0 +1,40 @@
+# FFXIII-2 test build: XIII-2_Test.ps1 fills in @GAME_ROOT@.
+
+[project]
+name = "ffxiii2"
+sdk_version = "0.10.0"
+game_root = "@GAME_ROOT@"
+
+[entrypoint]
+file_path = "@GAME_ROOT@/default.xex"
+out_directory_path = "generated/default"
+# As in the Lightning Returns port: guest registers in host locals where the game allows it.
+ctr_as_local = true
+xer_as_local = true
+reserved_as_local = true
+cr_as_local = true
+includes = ["analysis/x2_missing_branches.toml", "analysis/x2_data_pointer_functions.toml", "analysis/x2_virtual_thunks.toml"]
+
+[[modules]]
+guest_path = "z0070.xex"
+file_path = "@GAME_ROOT@/z0070.xex"
+out_directory_path = "generated/z0070"
+includes = ["analysis/z0070_functions.toml"]
+
+[[modules]]
+guest_path = "z0130.xex"
+file_path = "@GAME_ROOT@/z0130.xex"
+out_directory_path = "generated/z0130"
+includes = ["analysis/z0130_functions.toml"]
+
+[[modules]]
+guest_path = "z0160.xex"
+file_path = "@GAME_ROOT@/z0160.xex"
+out_directory_path = "generated/z0160"
+includes = ["analysis/z0160_functions.toml"]
+
+[[modules]]
+guest_path = "z0161.xex"
+file_path = "@GAME_ROOT@/z0161.xex"
+out_directory_path = "generated/z0161"
+includes = ["analysis/z0161_functions.toml"]

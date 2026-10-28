@@ -1,0 +1,30 @@
+# Game-specific PDATA-gap hints for FFXIII-2 (branch targets the analysis found in no function).
+# Each runs to its first unconditional branch / blr / bctr. NOT verified independent functions.
+[functions]
+0x8248A2E8 = { size = 8 } # terminal: b 0x82475950
+0x8248B708 = { size = 8 } # terminal: b 0x824763c8
+0x8248B710 = { size = 8 } # terminal: b 0x82479a78
+0x8248B718 = { size = 8 } # terminal: b 0x82479a88
+0x8248B730 = { size = 8 } # terminal: b 0x82478228
+0x8248BCD8 = { size = 8 } # terminal: b 0x8247b020
+# NOT FOUND in the update: 0x824ED7F8 = { size = 56 } # terminal: b 0x824e5748
+0x82763400 = { size = 20 } # terminal: blr 
+0x82765E50 = { size = 20 } # terminal: blr 
+# NOT FOUND in the update: 0x8276B5C0 = { size = 32 } # terminal: blr 
+0x827C4748 = { size = 48 } # terminal: blr 
+0x828324F0 = { size = 8 } # terminal: b 0x82808868
+0x828324F8 = { size = 16 } # terminal: b 0x82806ef0
+0x82832D48 = { size = 44 } # terminal: blr 
+0x82835920 = { size = 8 } # terminal: b 0x82807bb0
+0x82835940 = { size = 24 } # terminal: blr 
+# NOT FOUND in the update: 0x828A1BE8 = { size = 8 } # terminal: blr 
+0x82952790 = { size = 4 } # terminal: b 0x828917d8
+# NOT FOUND in the update: 0x8291F210 = { size = 4 } # terminal: b 0x82891758
+0x829A7A90 = { size = 12 } # terminal: blr 
+0x82A34EE0 = { size = 120 } # terminal: blr 
+0x82BDC9C8 = { size = 24 } # terminal: blr 
+0x82506C28 = { size = 56 } # terminal (title update build): 4BFF7B74
+0x82835918 = { size = 8 } # terminal (title update build): 480007F4
+0x8292C148 = { size = 8 } # terminal (title update build): 48008BAC
+0x82952778 = { size = 4 } # terminal (title update build): 4BF74668
+0x829531E8 = { size = 4 } # terminal (title update build): 4BF718A8
