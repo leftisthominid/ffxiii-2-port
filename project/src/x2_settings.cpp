@@ -10,6 +10,7 @@
 //   fps.txt        30 / 60g / 60 / 120   frame rate (60g: cutscenes stay at 30; 120: PC only,
 //                               cutscenes at 60, from the next start)
 //   aa.txt         off / fxaa / extreme   the renderer's FXAA pass
+//   story_recaps.txt on / off   The Story So Far videos (next recap; default on)
 //   resolution.txt (x2_hooks.cpp)
 
 #include <algorithm>
@@ -54,6 +55,7 @@ std::atomic<int> g_text_jp_at_start{-1};  // what this run's text language was s
 std::atomic<int> g_voice_jp_at_start{-1};
 std::atomic<int> g_ui_auto{1}, g_ui_ps3{0}, g_pad_ps3{-1};
 std::atomic<int> g_confirm_b{0};
+std::atomic<int> g_skip_story_recaps{0};
 std::atomic<int> g_fps{0};  // 0: 30 fps; 1: 60 fps, cutscenes 30; 2: 60 everywhere; 3: 120, cutscenes 60
 std::atomic<bool> g_vblank120{false};  // this start's vertical blank runs at 120 Hz (X2FrameRateStartup)
 std::atomic<int> g_aa{0}, g_aa_applied{-1};
@@ -111,6 +113,7 @@ void load() {
 #endif
   }
   g_confirm_b.store(X2ReadSetting("confirm.txt") == "b");
+  g_skip_story_recaps.store(X2ReadSetting("story_recaps.txt") == "off");
   const std::string fps = X2ReadSetting("fps.txt");
 #if defined(__ANDROID__)
   // No 120 on Android: a PC's "120" (copied by the phone install) is 30, the phone default.
@@ -125,6 +128,7 @@ void load() {
               g_ui_auto ? "auto" : g_ui_ps3 ? "PS3" : "360", g_confirm_b ? "B" : "A",
               g_fps == 3 ? "120 (cutscenes 60)" : g_fps == 2 ? "60" : g_fps == 1 ? "60 (cutscenes 30)" : "30",
               g_aa == 2 ? "FXAA extreme" : g_aa == 1 ? "FXAA" : "off");
+  REXLOG_INFO("XIII-2 Story Recaps: {}", g_skip_story_recaps.load() ? "off" : "on");
   X2LogVoiceStart();
 }
 
@@ -157,6 +161,13 @@ void apply_confirm(uint8_t* base) {
 // Backend for the menu (x2_config_menu.cpp) and the app (ffxiii2_app.h).
 // ---------------------------------------------------------------------------------------
 void X2SettingsLoad() { load(); }
+
+int X2ConfigGetSkipStoryRecaps() { return (load(), g_skip_story_recaps.load()); }
+void X2ConfigSetSkipStoryRecaps(int skip) {
+  g_skip_story_recaps.store(skip ? 1 : 0);
+  X2WriteSetting("story_recaps.txt", skip ? "off" : "on");
+  REXLOG_INFO("XIII-2 Story Recaps: {}", skip ? "off" : "on");
+}
 
 int X2ConfigGetVoice() { return (load(), g_voice_jp.load()); }
 // The converted Japanese voices are installed (jpvoice\ next to the game, made by the builder).
