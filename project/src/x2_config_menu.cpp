@@ -12,6 +12,7 @@
 //   Frame Rate       30 / 60 (gameplay) / 60 (all)
 //   Resolution       Auto / 720p / 1440p / 2160p (from the next start)
 //   Anti-Aliasing    Off / FXAA / FXAA Extreme
+//   Story Recaps     On / Off (applies to the next recap)
 // A change that applies at the next start asks whether to restart now (Yes/No).
 //
 // How the menu works (static analysis; Lightning Returns' equivalents in lr_config_menu.inc):
@@ -69,6 +70,8 @@ void X2ConfigSetFps(int choice);
 bool X2FpsNeedsRestart();
 int X2ConfigGetAa();
 void X2ConfigSetAa(int choice);
+int X2ConfigGetSkipStoryRecaps();
+void X2ConfigSetSkipStoryRecaps(int skip);
 int X2ResolutionChoice();
 bool X2SetResolution(int choice);
 int X2ResolutionScaleFor(int choice);
@@ -96,7 +99,7 @@ constexpr uint32_t kSoundConfirm = 4, kSoundCancel = 3, kSoundBuzzer = 0x48, kSo
 // ours take the default case wherever the hooks below do not catch them.
 constexpr uint32_t kIdPort = 0x6F;  // "Port Settings" on the game's page
 constexpr uint32_t kIdVoice = 0x60, kIdText = 0x61, kIdUi = 0x62, kIdConfirm = 0x63, kIdFps = 0x64,
-                   kIdResolution = 0x65, kIdAa = 0x66;
+                   kIdResolution = 0x65, kIdAa = 0x66, kIdRecaps = 0x67;
 
 struct X2Item {
   uint32_t id;
@@ -128,6 +131,7 @@ constexpr X2Item kItems[] = {
      {"$x2_res_0h", "$x2_res_1h", "$x2_res_2h", "$x2_res_3h"}},
 #endif
     {kIdAa, "$x2_aa", "$x2_aah", nullptr, 3, {"$x2_aa_0", "$x2_aa_1", "$x2_aa_2"}, {"$x2_aa_0h", "$x2_aa_1h", "$x2_aa_2h"}},
+    {kIdRecaps, "$x2_recap", "$x2_recaph", nullptr, 2, {"$x2_recap_on", "$x2_recap_off"}, {"$x2_recap_0h", "$x2_recap_1h"}},
 };
 constexpr uint32_t kItemsCount = sizeof(kItems) / sizeof(kItems[0]);
 
@@ -143,6 +147,12 @@ constexpr X2Text kTexts[] = {
     {"$x2_port", "Port Settings"},
     {"$x2_porth", "Language, button prompts, frame rate, resolution, and other settings of this port."},
     {"$x2_none", ""},
+    {"$x2_recap", "Story Recaps"},
+    {"$x2_recaph", "Play The Story So Far recap videos when loading a save. Applies to the next recap."},
+    {"$x2_recap_on", "On"},
+    {"$x2_recap_off", "Off"},
+    {"$x2_recap_0h", "Play The Story So Far recap videos."},
+    {"$x2_recap_1h", "Skip The Story So Far recaps. Other cinematics still play."},
     {"$x2_en", "English"},
     {"$x2_jp", "Japanese"},
     {"$x2_voice", "Voice Language"},
@@ -286,6 +296,7 @@ int x2_item_value(uint32_t id) {
     case kIdResolution: return X2ResolutionChoice();
 #endif
     case kIdAa: return X2ConfigGetAa();
+    case kIdRecaps: return X2ConfigGetSkipStoryRecaps();
     default: return 0;
   }
 }
@@ -747,6 +758,9 @@ REX_HOOK_RAW(sub_825BE8A8) {
       break;
     case kIdAa:
       if (value < 3 && value != X2ConfigGetAa()) X2ConfigSetAa(value);
+      break;
+    case kIdRecaps:
+      if (value >= 0 && value < 2 && value != X2ConfigGetSkipStoryRecaps()) X2ConfigSetSkipStoryRecaps(value);
       break;
     case kIdResolution: {
 #if defined(__ANDROID__)

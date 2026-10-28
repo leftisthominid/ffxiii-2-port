@@ -359,11 +359,12 @@ class Converter:
             if e == b'vmdl':
                 part = vmdl.object_part(data)
                 y = self.learned_member('vmdl', part, path)
+                y = vmdl.preserve_geometry(data, y + data[len(part):])
                 try:
-                    out.append([name, ext, vmdl.convert(data, y + data[len(part):], self.shaders, self.ctx)])
+                    out.append([name, ext, vmdl.convert(data, y, self.shaders, self.ctx)])
                     self.note('effect model (learned, shaders from the library or compiled)')
                 except KeyError:
-                    out.append([name, ext, y + data[len(part):]])
+                    out.append([name, ext, y])
                     self.note('effect model with a shader not in the library (PC shader kept)')
                 continue
             if e == b'scb':

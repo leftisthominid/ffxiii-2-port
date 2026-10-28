@@ -44,6 +44,7 @@ def convert(pc, y, lib, ctx=None):
     """pc: the PC member; y: its learned 360 byte order in the PC layout (qix.convert / fix).
     -> the 360 member with the 360 programs (KeyError when one is not in the library and not made
     by ctx: shader.Context compiles pixel shaders, linked to this model's vertex shader)"""
+    y = preserve_geometry(pc, y)
     bl = blocks(pc)
     if not bl: return y
     first = bl[0][1]
@@ -74,6 +75,25 @@ def convert(pc, y, lib, ctx=None):
         out += hashlib.md5(x).digest() + struct.pack('>II', len(x), kind) + bytes(8) + x
     struct.pack_into('>Q', out, 0x10, len(out))
     struct.pack_into('>I', out, R + 4, len(out))
+    return bytes(out)
+
+def preserve_geometry(pc, converted):
+    """Keep endian-marked embedded geometry for the game's own loader.
+
+    VFXM and its VINS stream are independent binary formats, not Qix scalar
+    arrays. Their first byte tells the native reader to swap the Steam data.
+    Guessing u16 pairs here turned a stream count of 1 into 65536.
+    """
+    L = qix.layout(pc)
+    if L is None: return converted
+    out = bytearray(converted)
+    for at, kind in L['pointers']:
+        if kind != 0 or at + 8 > len(pc): continue
+        offset, size = struct.unpack_from('<II', pc, at)
+        start = R + offset
+        if size < 16 or start + size > len(pc): continue
+        if pc[start:start + 4] != b'\1\0\0\0' or pc[start + 4:start + 8] not in (b'mxfv', b'sniv'): continue
+        out[start:start + size] = pc[start:start + size]
     return bytes(out)
 
 def object_part(d, big_endian=False):

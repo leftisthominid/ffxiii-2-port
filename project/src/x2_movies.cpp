@@ -35,6 +35,7 @@
 #endif
 
 std::filesystem::path X2InstallDir();  // x2_settings.cpp: next to the exe (Android: X2_INSTALL_DIR)
+int X2ConfigGetSkipStoryRecaps();
 
 namespace {
 uint32_t lr_load_be32(uint8_t* base, uint32_t address) {
@@ -900,6 +901,17 @@ REX_HOOK_RAW(sub_82C36D38) {
     else offset |= uint64_t(c - 0x40) << (4 * (i - 8));
   }
   REXLOG_INFO("LR movie: BinkOpen (file code {:X})", offset);
+  if (encoded && X2ConfigGetSkipStoryRecaps()) {
+    for (const auto& movie : kLrMovies) {
+      if (movie.code == uint32_t(offset) && std::strncmp(movie.name, "tm_abst_", 8) == 0) {
+        // The ordinary movie player clears its pending-open flag on a null
+        // handle (82874170). Automatic recaps then finish through that path.
+        ctx.r3.u64 = 0;
+        REXLOG_INFO("XIII-2 Story Recaps: {} skipped by Port Settings", movie.name);
+        return;
+      }
+    }
+  }
 #if defined(LR_LOCAL_TEST_HARNESS)
   // LR_TEST_NO_MOVIES=1: every movie fails to open, so the game skips it (local test runs
   // stall in the opening movie, whose frames never decode here).
