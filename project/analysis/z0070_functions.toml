@@ -1,0 +1,3 @@
+# z0070: the CRT memcpy (hand-written, no .pdata entry), whole: its tail branches back into the loop.
+[functions]
+0x88814418 = { size = 168 }

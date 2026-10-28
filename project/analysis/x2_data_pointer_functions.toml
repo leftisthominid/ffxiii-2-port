@@ -1,0 +1,316 @@
+# FFXIII-2: functions reached only through pointers in data sections (vtables, callback
+# tables) or built in code with lis/addi, lying in gaps between .pdata/recompiled functions. Size follows the code from the
+# entry to its blr/bctr/tail call (tools/gap_pointers.py).
+[functions]
+0x82251F18 = { size = 4 }
+0x8228BFE8 = { size = 24 }
+0x8228C090 = { size = 24 }
+0x8228C0A8 = { size = 24 }
+0x8228C0C0 = { size = 20 }
+0x823F6198 = { size = 16 }
+0x823F61B8 = { size = 16 }
+0x823F61D8 = { size = 16 }
+0x823F61F8 = { size = 16 }
+0x823F6218 = { size = 28 }
+# NOT FOUND in the update: 0x823E29E0 = { size = 8 }
+0x82400680 = { size = 8 }
+0x8247A100 = { size = 8 }
+0x8247A118 = { size = 8 }
+0x8247A120 = { size = 8 }
+0x8247A1C8 = { size = 8 }
+0x8247A1D0 = { size = 8 }
+0x8247A1D8 = { size = 8 }
+0x8247A378 = { size = 20 }
+0x8247A3A0 = { size = 12 }
+0x8247A428 = { size = 8 }
+0x8247A430 = { size = 8 }
+0x8247A7E0 = { size = 32 }
+0x8247A830 = { size = 16 }
+0x8247A8A0 = { size = 8 }
+0x8247A8A8 = { size = 8 }
+0x8247BE80 = { size = 8 }
+# NOT FOUND in the update: 0x82464760 = { size = 8 }
+# NOT FOUND in the update: 0x82464768 = { size = 8 }
+0x82480560 = { size = 24 }
+0x8248BD38 = { size = 8 }
+0x824C7B08 = { size = 56 }
+0x824F8100 = { size = 40 }
+0x82502450 = { size = 32 }
+0x82502470 = { size = 32 }
+0x82502490 = { size = 12 }
+0x82511724 = { size = 8 }
+0x825124C0 = { size = 16 }
+0x82512770 = { size = 8 }
+0x82512780 = { size = 44 }
+0x82512A28 = { size = 8 }
+0x82512A30 = { size = 12 }
+0x82512CE8 = { size = 4 }
+0x82513780 = { size = 16 }
+0x8251B530 = { size = 8 }
+0x82525270 = { size = 8 }
+0x825983A0 = { size = 60 }
+0x8259B988 = { size = 8 }
+0x8259B990 = { size = 4 }
+0x827C3728 = { size = 8 }
+0x827C3740 = { size = 8 }
+# NOT FOUND in the update: 0x827A9F58 = { size = 16 }
+# NOT FOUND in the update: 0x827A9F78 = { size = 16 }
+# NOT FOUND in the update: 0x827A9F88 = { size = 16 }
+# NOT FOUND in the update: 0x827A9F98 = { size = 16 }
+# NOT FOUND in the update: 0x827A9FA8 = { size = 16 }
+0x82808100 = { size = 4 }
+0x82808ED0 = { size = 28 }
+0x82809588 = { size = 24 }
+0x828095A0 = { size = 4 }
+0x828095C0 = { size = 24 }
+0x828095D8 = { size = 4 }
+0x828095F8 = { size = 24 }
+0x82809610 = { size = 4 }
+0x828135F0 = { size = 4 }
+0x82813A90 = { size = 24 }
+0x82813DD8 = { size = 4 }
+0x82813EC8 = { size = 24 }
+0x82813EE0 = { size = 4 }
+0x82813F00 = { size = 24 }
+0x82813F18 = { size = 4 }
+0x8281F080 = { size = 44 }
+0x8281F0C0 = { size = 16 }
+0x8281F0D0 = { size = 44 }
+0x8281F158 = { size = 28 }
+0x8281F760 = { size = 4 }
+# NOT FOUND in the update: 0x827F1808 = { size = 24 }
+# NOT FOUND in the update: 0x827F1820 = { size = 4 }
+0x82836E28 = { size = 16 }
+0x828371C8 = { size = 8 }
+0x828411E8 = { size = 40 }
+0x82841210 = { size = 36 }
+0x82841258 = { size = 44 }
+# NOT FOUND in the update: 0x82870F20 = { size = 24 }
+0x828A3E48 = { size = 24 }
+# NOT FOUND in the update: 0x82870F50 = { size = 24 }
+0x828A3E60 = { size = 12 }
+0x828ECA68 = { size = 8 }
+0x828ECA78 = { size = 8 }
+0x828F38C8 = { size = 40 }
+0x828F6B68 = { size = 8 }
+0x828F6D80 = { size = 24 }
+0x828F97A8 = { size = 20 }
+0x829030F8 = { size = 8 }
+0x82905418 = { size = 8 }
+0x8291C0D8 = { size = 8 }
+0x82923528 = { size = 20 }
+0x82924AA0 = { size = 8 }
+0x829365C0 = { size = 32 }
+0x829398B0 = { size = 8 }
+0x829398D0 = { size = 8 }
+0x82940D28 = { size = 8 }
+# NOT FOUND in the update: 0x82913550 = { size = 8 }
+# NOT FOUND in the update: 0x82916350 = { size = 16 }
+# NOT FOUND in the update: 0x82916370 = { size = 28 }
+0x8294A2D0 = { size = 16 }
+# NOT FOUND in the update: 0x8291E798 = { size = 8 }
+# NOT FOUND in the update: 0x8291E7A0 = { size = 8 }
+# NOT FOUND in the update: 0x8291E7A8 = { size = 8 }
+0x829529E0 = { size = 8 }
+0x829529F0 = { size = 8 }
+0x829529F8 = { size = 8 }
+0x82952A10 = { size = 8 }
+0x82952A18 = { size = 8 }
+0x82952A28 = { size = 8 }
+0x82952A30 = { size = 8 }
+0x82952A38 = { size = 8 }
+0x82952A40 = { size = 8 }
+0x82952A48 = { size = 8 }
+0x82952A50 = { size = 8 }
+0x82952A58 = { size = 8 }
+0x82952A60 = { size = 8 }
+0x82952A68 = { size = 8 }
+0x82952A70 = { size = 8 }
+0x82952A78 = { size = 8 }
+0x82952A80 = { size = 8 }
+0x82952A88 = { size = 8 }
+0x82952A90 = { size = 8 }
+0x82952A98 = { size = 8 }
+0x82952AA0 = { size = 8 }
+0x82952AA8 = { size = 8 }
+0x82952AB0 = { size = 8 }
+# NOT FOUND in the update: 0x8291F1F8 = { size = 8 }
+0x829531C8 = { size = 8 }
+0x829531D0 = { size = 8 }
+0x82953480 = { size = 8 }
+0x82953488 = { size = 8 }
+0x82953490 = { size = 8 }
+0x82953498 = { size = 8 }
+0x829534A0 = { size = 8 }
+0x829534A8 = { size = 8 }
+0x829534B0 = { size = 8 }
+0x829534B8 = { size = 8 }
+0x829534C0 = { size = 8 }
+0x829534C8 = { size = 8 }
+0x829534D0 = { size = 8 }
+0x829534D8 = { size = 8 }
+0x829534E0 = { size = 8 }
+0x829534E8 = { size = 8 }
+0x829534F0 = { size = 8 }
+0x829534F8 = { size = 8 }
+0x82953500 = { size = 8 }
+0x82953508 = { size = 8 }
+0x82953510 = { size = 8 }
+0x82953518 = { size = 8 }
+0x82953520 = { size = 8 }
+0x82953528 = { size = 8 }
+0x82953538 = { size = 8 }
+0x82953548 = { size = 8 }
+0x82953550 = { size = 8 }
+0x82953560 = { size = 8 }
+0x82953A10 = { size = 8 }
+0x82953CF0 = { size = 8 }
+0x82953CF8 = { size = 8 }
+0x82953D00 = { size = 8 }
+0x82953D08 = { size = 8 }
+0x82953D10 = { size = 8 }
+0x82953D18 = { size = 8 }
+0x82953D20 = { size = 8 }
+0x82953D28 = { size = 8 }
+0x82953D30 = { size = 8 }
+0x82953D38 = { size = 8 }
+0x82953D40 = { size = 8 }
+0x82953D48 = { size = 8 }
+0x82953D50 = { size = 8 }
+0x82953D60 = { size = 8 }
+0x82953D68 = { size = 8 }
+0x82953D70 = { size = 8 }
+0x82953D78 = { size = 8 }
+0x82953D80 = { size = 8 }
+0x82953D88 = { size = 8 }
+0x82953D90 = { size = 8 }
+0x82953D98 = { size = 8 }
+0x82953DA0 = { size = 8 }
+0x82953DA8 = { size = 8 }
+0x82953DB0 = { size = 8 }
+0x82953DB8 = { size = 8 }
+0x82953DC0 = { size = 8 }
+0x82953DC8 = { size = 8 }
+0x829545A8 = { size = 40 }
+0x829CE910 = { size = 68 }
+# NOT FOUND in the update: 0x829E1618 = { size = 8 }
+# NOT FOUND in the update: 0x829E1638 = { size = 16 }
+0x82A155D8 = { size = 8 }
+0x82A156A0 = { size = 8 }
+0x82A31308 = { size = 16 }
+# NOT FOUND in the update: 0x82A00F10 = { size = 8 }
+0x82AE5320 = { size = 32 }
+0x82AEAE98 = { size = 8 }
+0x82AF0108 = { size = 20 }
+0x82AF0130 = { size = 20 }
+0x82AF0158 = { size = 20 }
+0x82AF01C0 = { size = 32 }
+# NOT FOUND in the update: 0x82ACE910 = { size = 8 }
+0x82B1DA20 = { size = 16 }
+0x82B1DA40 = { size = 16 }
+0x82B1DA60 = { size = 16 }
+0x82B1DA80 = { size = 16 }
+0x82B1DAA0 = { size = 28 }
+0x82B31760 = { size = 8 }
+0x82B49088 = { size = 24 }
+0x82B490A0 = { size = 24 }
+0x82B497A0 = { size = 24 }
+0x82B497B8 = { size = 24 }
+0x82B497D0 = { size = 20 }
+0x82B4AF68 = { size = 32 }
+0x82B4AF88 = { size = 32 }
+0x82B4AFA8 = { size = 32 }
+0x82B4AFC8 = { size = 32 }
+0x82B4AFE8 = { size = 32 }
+0x82B4D778 = { size = 24 }
+0x82B4D790 = { size = 16 }
+0x82B884D8 = { size = 8 }
+# NOT FOUND in the update: 0x82B58BF8 = { size = 8 }
+# NOT FOUND in the update: 0x82B58C00 = { size = 8 }
+# NOT FOUND in the update: 0x82B58C08 = { size = 8 }
+# NOT FOUND in the update: 0x82B58C10 = { size = 8 }
+# NOT FOUND in the update: 0x82B58C20 = { size = 8 }
+# NOT FOUND in the update: 0x82B58C28 = { size = 8 }
+0x82B8C638 = { size = 88 }
+# NOT FOUND in the update: 0x82B58C88 = { size = 8 }
+# NOT FOUND in the update: 0x82B5E1E8 = { size = 8 }
+# NOT FOUND in the update: 0x82B5E1F0 = { size = 8 }
+# NOT FOUND in the update: 0x82B5E1F8 = { size = 8 }
+# NOT FOUND in the update: 0x82B5E208 = { size = 8 }
+0x82B91CE0 = { size = 244 }
+# NOT FOUND in the update: 0x82B5F598 = { size = 8 }
+# NOT FOUND in the update: 0x82B5F5A8 = { size = 8 }
+# NOT FOUND in the update: 0x82B5F5B0 = { size = 8 }
+# NOT FOUND in the update: 0x82B5F5B8 = { size = 8 }
+# NOT FOUND in the update: 0x82B5F5C0 = { size = 8 }
+# NOT FOUND in the update: 0x82B5F5C8 = { size = 8 }
+0x82B93060 = { size = 252 }
+0x82B937A0 = { size = 8 }
+# NOT FOUND in the update: 0x82B60228 = { size = 8 }
+0x82B965E0 = { size = 44 }
+0x82B9D1B0 = { size = 24 }
+0x82B9E020 = { size = 8 }
+# NOT FOUND in the update: 0x82B87D10 = { size = 8 }
+0x82BBBA38 = { size = 8 }
+0x82BBBA48 = { size = 8 }
+# NOT FOUND in the update: 0x82B89B80 = { size = 8 }
+0x82BF0770 = { size = 8 }
+0x82C09840 = { size = 4 }
+0x82C2E638 = { size = 24 }
+0x82C2E650 = { size = 20 }
+0x82C2E698 = { size = 20 }
+0x82C2EC68 = { size = 4 }
+# Found in the title update build (tools/gap_pointers.py on the patched image):
+0x8228BFD0 = { size = 24 }
+0x8228C000 = { size = 24 }
+0x823FA300 = { size = 8 }
+0x8241D6C0 = { size = 16 }
+0x8241D6E0 = { size = 16 }
+0x8241D6F0 = { size = 16 }
+0x8247CAD0 = { size = 8 }
+0x8247CAD8 = { size = 8 }
+0x82513940 = { size = 60 }
+0x8281FC40 = { size = 24 }
+0x8281FC58 = { size = 4 }
+0x828371D0 = { size = 8 }
+0x829327C8 = { size = 20 }
+0x829398B8 = { size = 8 }
+0x82941F78 = { size = 32 }
+0x82943390 = { size = 8 }
+0x8294C588 = { size = 16 }
+0x8294C5A8 = { size = 20 }
+0x82952760 = { size = 8 }
+0x82952768 = { size = 8 }
+0x82952770 = { size = 8 }
+0x829529D8 = { size = 8 }
+0x829531D8 = { size = 8 }
+0x829531E0 = { size = 8 }
+0x82953530 = { size = 8 }
+0x82A154E8 = { size = 8 }
+0x82A15508 = { size = 16 }
+0x82AB4850 = { size = 8 }
+0x82B01E98 = { size = 8 }
+0x82B30788 = { size = 12 }
+0x82B4AC68 = { size = 20 }
+0x82B8C610 = { size = 8 }
+0x82B8C618 = { size = 8 }
+0x82B8C628 = { size = 8 }
+0x82B8C630 = { size = 8 }
+0x82B8C690 = { size = 8 }
+0x82B91C88 = { size = 8 }
+0x82B91C90 = { size = 8 }
+0x82B91C98 = { size = 8 }
+0x82B91CA0 = { size = 8 }
+0x82B91CA8 = { size = 8 }
+0x82B91CB0 = { size = 8 }
+0x82B91CC0 = { size = 8 }
+0x82B91CC8 = { size = 8 }
+0x82B91CD0 = { size = 8 }
+0x82B91CD8 = { size = 8 }
+0x82B93050 = { size = 8 }
+0x82B93058 = { size = 8 }
+0x82B97A88 = { size = 8 }
+0x82BBB530 = { size = 8 }
+0x82BBBA40 = { size = 8 }
+0x82BBD2B0 = { size = 8 }
+0x82C2ECE8 = { size = 12 }
