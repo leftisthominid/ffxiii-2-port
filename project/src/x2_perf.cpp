@@ -25,6 +25,7 @@
 #include <rex/system/xmemory.h>
 #include <rex/thread/mutex.h>
 #include "x2_audio_pool.h"
+#include "x2_effect_lookup_capture.h"
 
 #if defined(_M_X64) || defined(__x86_64__)
 #include <immintrin.h>
@@ -470,6 +471,18 @@ void log_guest_regs(const char* tag, const PPCContext* c) {
         for (SIZE_T i = 0; i < count && i < sizeof(bytes); ++i) hex += fmt::format("{:02X}", bytes[i]);
         REXLOG_ERROR("{}: effect lookup {} at {:08X}, {}/{} bytes{}: {}", tag, range.name, range.address,
                      count, range.size, complete ? "" : " (unreadable/partial)", hex);
+      }
+      const auto lookup = X2CaptureEffectLookup(c->r30.u32, c->r27.u32 + 4,
+          [&](uint32_t address, uint8_t* bytes, size_t size) {
+            SIZE_T count = 0;
+            return ReadProcessMemory(GetCurrentProcess(), base + address, bytes, size, &count) && count == size;
+          });
+      REXLOG_ERROR("{}: effect selected group {} index {} resource {:08X}, capture {} at {}",
+                   tag, lookup.group, lookup.index, lookup.resource, lookup.complete ? "complete" : "incomplete", lookup.stage);
+      for (const auto& range : lookup.ranges) {
+        std::string hex;
+        for (auto byte : range.bytes) hex += fmt::format("{:02X}", byte);
+        REXLOG_ERROR("{}: effect chain {} at {:08X}: {}", tag, range.name, range.address, hex);
       }
     }
     if (!texts.empty()) REXLOG_ERROR("{}: registers pointing to text:{}", tag, texts);
