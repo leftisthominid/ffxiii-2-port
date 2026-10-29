@@ -70,13 +70,18 @@ REX_HOOK_RAW(sub_828510C8) {
 #include <filesystem>
 #include <string>
 #include <string_view>
+#include <chrono>
+#include <map>
+#include <mutex>
 
 #include <rex/filesystem.h>
 #include <rex/logging/macros.h>
 #include <rex/system/kernel_state.h>
 #include <rex/system/xmemory.h>
+#include <rex/filesystem/devices/host_path_entry.h>
 #include "x2_module_paths.h"
 #include "x2_audio_pool.h"
+#include "x2_jp_dlc_provenance.h"
 
 namespace {
 uint32_t x2_be32(uint8_t* base, uint32_t address) {
@@ -178,8 +183,35 @@ std::string x2_jp_dlc_path(const std::string& path) {
   const std::string name = path.substr(9);
   if (name.rfind("filelist_p", 0) != 0 && name.rfind("white_p", 0) != 0) return {};
   const std::string id = path.substr(0, 7);
+  if (name != "filelist_p" + id + "img_u.x360.bin" && name != "filelist_p" + id + "scr_u.x360.bin" &&
+      name != "white_p" + id + "img_u.x360.bin" && name != "white_p" + id + "scr_u.x360.bin") return {};
   std::error_code ec;
-  if (!std::filesystem::exists(X2InstallDir() / "jpvoice_dlc" / id / name, ec)) return {};
+  const auto copy = X2InstallDir() / "jpvoice_dlc" / id;
+  if (!std::filesystem::exists(copy / name, ec)) return {};
+  // Validate the package as a unit, before opening either its list or archive.
+  // The installed files must remain stable while the game runs. Cache this
+  // read-only comparison once per package so ordinary opens do not rescan it.
+  static std::mutex mutex;
+  static std::map<std::string, bool> current;
+  std::lock_guard<std::mutex> lock(mutex);
+  auto it = current.find(id);
+  if (it == current.end()) {
+    auto* kernel = rex::system::kernel_state();
+    auto* vfs = kernel ? kernel->file_system() : nullptr;
+    auto* entry = vfs ? dynamic_cast<rex::filesystem::HostPathEntry*>(vfs->ResolvePath(path)) : nullptr;
+    std::string reason = "installed package is not a host folder";
+    auto last = std::chrono::steady_clock::now();
+    const bool valid = entry && X2JpDlcCurrent(entry->host_path().parent_path(), copy, id, reason, [&](uint64_t done) {
+      const auto now = std::chrono::steady_clock::now();
+      if (now - last >= std::chrono::seconds(10)) {
+        REXLOG_INFO("XIII-2 voices: checking DLC {} provenance ({} MiB)", id, done >> 20);
+        last = now;
+      }
+    });
+    it = current.emplace(id, valid).first;
+    if (!valid) REXLOG_WARN("XIII-2 voices: DLC {} uses installed English files: {}", id, reason);
+  }
+  if (!it->second) return {};
   return "X2JPDLC:\\" + id + "\\" + name;
 }
 }  // namespace
@@ -188,7 +220,8 @@ REX_EXTERN(__imp__sub_82B63998);
 REX_HOOK_RAW(sub_82B63998) {
   const std::string path = x2_cstr(base, ctx.r3.u32, 200);
   if (const std::string jp = x2_jp_dlc_path(path); !jp.empty()) {
-    static uint32_t buffer = 0;
+    // Concurrent file opens must not overwrite another thread's redirected path.
+    static thread_local uint32_t buffer = 0;
     if (!buffer) buffer = rex::system::kernel_state()->memory()->SystemHeapAlloc(256);
     if (buffer && jp.size() < 256) {
       std::memcpy(base + buffer, jp.c_str(), jp.size() + 1);

@@ -7,6 +7,10 @@ $script:X2JpVoiceVersion = '5'
 # earlier build).
 function Build-X2Converter($t, [string]$source, [string]$exe) {
   $hash = (Get-FileHash -LiteralPath $source -Algorithm SHA256).Hash
+  if ((Split-Path $source -Leaf) -eq 'x2_jpvoice.cpp') {
+    $helper = Join-Path (Split-Path $source) '..\project\src\x2_jp_dlc_provenance.h'
+    $hash += ':' + (Get-FileHash -LiteralPath $helper -Algorithm SHA256).Hash
+  }
   $stamp = "$exe.source"
   if ((Test-Path -LiteralPath $exe) -and (Test-Path -LiteralPath $stamp) -and (Get-Content -LiteralPath $stamp -TotalCount 1) -eq $hash) { return }
   New-Item -ItemType Directory -Force -Path (Split-Path $exe) | Out-Null
@@ -20,7 +24,7 @@ function Build-X2Converter($t, [string]$source, [string]$exe) {
 # in <out>\NNNNNNN\ (the port opens those copies while the voices are Japanese). Once per package
 # and converter version.
 # 2: the lines too large at 24 kHz go down to 16, 11, or 8 kHz; the DLC scenes' Japanese lip-sync.
-$script:X2JpDlcVersion = '4'
+$script:X2JpDlcVersion = '5'
 function Convert-X2JpDlcVoices($t, [string]$steam, [string]$ffmpeg, [string]$dlcRoot, [string]$out, [string]$work, [string]$logs) {
   if (-not (Test-Path -LiteralPath $dlcRoot)) { Say '  no DLC packages installed'; return }
   $exe = Join-Path $work 'x2_jpvoice.exe'
@@ -50,8 +54,10 @@ function Convert-X2JpDlcVoices($t, [string]$steam, [string]$ffmpeg, [string]$dlc
     $sig = "$script:X2JpDlcVersion $($pkg.Name) " + (($arcs | ForEach-Object { "$($_.Name)=$($_.Length)@$($_.LastWriteTimeUtc.Ticks)" }) -join ' ')
     $stamp = Join-Path $out "$id.txt"
     if ((Test-Path -LiteralPath $stamp) -and (Get-Content -LiteralPath $stamp -TotalCount 1) -eq $sig) {
-      Say "  DLC $id`: already done"
-      continue
+      $checkLog = Join-Path $logs "jpvoice_dlc_${id}_verify.log"
+      $check = Invoke-Logged $exe @('--verify-dlc', $pkg.FullName, (Join-Path $out $id), $id) $checkLog
+      if ($check -eq 0) { Say "  DLC $id`: already done (source verified)"; continue }
+      Say "  DLC $id`: stale or incomplete Japanese copy; rebuilding" 'Yellow'
     }
     Say "  DLC $id`: converting its Japanese voices (a few minutes for the big packages)..."
     $log = Join-Path $logs "jpvoice_dlc_$id.log"
@@ -76,6 +82,8 @@ function Convert-X2JpDlcVoices($t, [string]$steam, [string]$ffmpeg, [string]$dlc
           $readyLists = @(Get-ChildItem -LiteralPath $ready -File -Filter 'filelist_p*_u.x360.bin')
           if (-not $readyLists.Count) { throw "Japanese DLC file lists missing: $ready" }
           foreach ($list in $readyLists) {
+            if (-not (Test-Path -LiteralPath (Join-Path $ready ('source_' + $list.Name)))) { throw "Japanese DLC provenance missing: $($list.Name)" }
+            if (-not (Test-Path -LiteralPath (Join-Path $ready ('verified_' + $list.Name)))) { throw "Japanese DLC validation missing: $($list.Name)" }
             $archive = Join-Path $ready ($list.Name -replace '^filelist_', 'white_')
             if (-not (Test-Path -LiteralPath $archive)) { throw "Japanese DLC archive missing: $archive" }
           }
