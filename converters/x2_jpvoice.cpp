@@ -2,7 +2,7 @@
 //
 // Reads the English voice files of the Xbox 360 release and the Japanese voice files of the
 // Steam release (set "c": alba_data\sys\filelistc, the udp\white_patch_c update archives,
-// and the zone archives; same file codes on both platforms), converts every Japanese voice file
+// and the zone archives; voice lines matched by path), converts every Japanese voice file
 // to the 360 layout, and writes them as a 360 update patch:
 //   <out>/filelist_patch_u.x360.bin, white_patch_u.x360.bin           (base and zone files)
 //   <out>/filelist_patch_scr_u.x360.bin, white_patch_scr_u.x360.bin   (scenario archive files)
@@ -1345,6 +1345,17 @@ static std::string jp_path_for(std::string p) {
   return p;
 }
 
+// File codes are not a cross-language identity: unrelated voice lines can share
+// (ftype, code). Only the corresponding Japanese path may replace an English
+// line. A missing path keeps the English audio instead of borrowing another line.
+template <class Ref>
+static Ref japanese_voice(const Entry& english, const std::map<std::string, Ref>& byPath) {
+  if (!is_english_voice(lower(english.path))) return {};
+  const auto it = byPath.find(jp_path_for(lower(english.path)));
+  if (it == byPath.end() || !it->second.e || it->second.e->ftype != english.ftype) return {};
+  return it->second;
+}
+
 // One output archive and its list: the base files' patch (white_patch_u, which the game also
 // checks for the zone files) or the scenario files' patch (white_patch_scr_u).
 struct PatchOut {
@@ -1400,14 +1411,8 @@ static int build(const fs::path& root360, const fs::path& rootSteam, const fs::p
   for (auto& s : us)
     for (auto& e : s.entries) {
       if (!is_english_voice(e.path) || !seen.insert({e.ftype, e.code}).second) continue;
-      Ref j{nullptr, nullptr};
-      auto it = jpByCode.find({e.ftype, e.code});
-      if (it != jpByCode.end() && it->second.e->path.find("/usa/") == std::string::npos) {
-        j = it->second;
-      } else if (auto ip = jpByPath.find(lower(jp_path_for(e.path))); ip != jpByPath.end()) {
-        j = ip->second;
-        byName++;
-      }
+      Ref j = japanese_voice(e, jpByPath);
+      if (j.e && j.e->code != e.code) byName++;
       if (!j.e) {
         noJp++;
         fprintf(report, "%s,kept English,no Japanese file,%u,,\n", e.path.c_str(), e.usize);
@@ -1416,7 +1421,7 @@ static int build(const fs::path& root360, const fs::path& rootSteam, const fs::p
       jobs.push_back({Ref{&s, &e}, j});
     }
   printf("English voice files: %zu with a Japanese version, %d without (those stay English)\n", jobs.size(), noJp);
-  if (byName) printf("  (%d matched by name instead of file code)\n", byName);
+  if (byName) printf("  (%d path matches have a different file code)\n", byName);
   fflush(stdout);
 
   PatchOut outs[2];
@@ -1993,10 +1998,7 @@ static int dlc_voices(const fs::path& rootSteam, const fs::path& pkg, const fs::
     for (size_t i = 0; i < ents.size(); i++) {
       const Entry& e = ents[i];
       if (!is_english_voice(e.path)) continue;
-      Ref j{nullptr, nullptr};
-      auto it = jpByCode.find({e.ftype, e.code});
-      if (it != jpByCode.end() && it->second.e->path.find("/usa/") == std::string::npos) j = it->second;
-      else if (auto ip = jpByPath.find(lower(jp_path_for(e.path))); ip != jpByPath.end()) j = ip->second;
+      Ref j = japanese_voice(e, jpByPath);
       if (j.e) jobs.push_back({i, j});
       else noJp++;
     }
