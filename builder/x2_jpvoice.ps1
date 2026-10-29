@@ -24,7 +24,21 @@ $script:X2JpDlcVersion = '3'
 function Convert-X2JpDlcVoices($t, [string]$steam, [string]$ffmpeg, [string]$dlcRoot, [string]$out, [string]$work, [string]$logs) {
   if (-not (Test-Path -LiteralPath $dlcRoot)) { Say '  no DLC packages installed'; return }
   $exe = Join-Path $work 'x2_jpvoice.exe'
-  Build-X2Converter $t (Join-Path $PSScriptRoot '..\converters\x2_jpvoice.cpp') $exe
+  try {
+    Build-X2Converter $t (Join-Path $PSScriptRoot '..\converters\x2_jpvoice.cpp') $exe
+  } catch {
+    # Compilation can fail before any package rebuild starts. Disable the old
+    # copies here too, so manually starting the game cannot select stale DLC.
+    if (Test-Path -LiteralPath $out) {
+      foreach ($copy in Get-ChildItem -LiteralPath $out -Directory | Where-Object { $_.Name -match '^\d{7}$' }) {
+        $disabled = Join-Path $work ('jpvoice_dlc_disabled\' + $copy.Name + '_' + [guid]::NewGuid().ToString('N'))
+        New-Item -ItemType Directory -Force -Path (Split-Path $disabled) | Out-Null
+        Move-Item -LiteralPath $copy.FullName -Destination $disabled
+        Remove-Item -LiteralPath (Join-Path $out ($copy.Name + '.txt')) -Force -ErrorAction SilentlyContinue
+      }
+    }
+    throw
+  }
   New-Item -ItemType Directory -Force -Path $out | Out-Null
   foreach ($pkg in Get-ChildItem -LiteralPath $dlcRoot -Directory) {
     $lists = @(Get-ChildItem -LiteralPath $pkg.FullName -File -Filter 'filelist_p*_u.x360.bin')
