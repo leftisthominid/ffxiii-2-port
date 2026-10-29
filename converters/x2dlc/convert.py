@@ -250,12 +250,17 @@ class Converter:
                     if self._qix_properties is None:
                         self._qix_properties = qix.learn_property_targets(self.pairs.get('veff', []))
                 y = qix.apply_property_targets(pc, y, self._qix_properties)
+                y, indices = qix.fix_generate_indices(pc, y)
+                if indices: self.note('effect resource indices (u16)', indices)
             y = qix.keep_text(pc, y, qix.layout(pc))
             y, _ = qix.fix(pc, bytes(y))           # the exact parts last
             y, _ = qix.fix_game(pc, y)
             if ext in ('veff', 'vlea'):
                 y, curves = qix.fix_curves(pc, y)
                 if curves: self.note('effect curves (typed)', curves)
+            if ext in ('vlea', 'vins', 'vinsbin'):
+                y, indices = qix.fix_leaf_indices(pc, y)
+                if indices: self.note('leaf object indices (u16)', indices)
             self.note('learned (effect layouts)')
             return y
         if len(pc) <= 0x20000 and self.pairs.get(ext):
@@ -285,6 +290,9 @@ class Converter:
         c, m = qix.fix_game(pc, bytes(c))
         if n or m: self.note('relocation table made exact')
         if lw is not None: c = qix.layout_post(pc, bytes(c), L, lw[3])
+        if ext in ('vlea', 'vins', 'vinsbin'):
+            c, indices = qix.fix_leaf_indices(pc, bytes(c))
+            if indices: self.note('leaf object indices (u16)', indices)
         return self.header_rule(ext, pc, bytes(c))
 
     def layout_words(self, ext):

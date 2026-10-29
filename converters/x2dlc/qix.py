@@ -484,6 +484,62 @@ def contextual_layout(d):
         for sig, base, count in group:
             yield (sig, i, schema), base, count
 
+def fix_leaf_indices(pc, x):
+    """BaseLeaf's two reference arrays contain signed 16-bit object IDs.
+
+    Cutscene VINS nodes have 80-byte records; effect leaves use 84-byte
+    records. The native 828ED1E0 reader passes both +16/+24 lists to the same
+    828ED040 helper. A four-byte swap can exchange adjacent one-ID lists.
+    """
+    L = layout(pc)
+    if L is None or len(pc) != len(x): return x, 0
+    nodes = {(80, ((32, 2), (40, 3), (0, 0), (8, 0), (16, 0), (24, 0), (68, 0))),
+             (84, ((32, 2), (40, 3), (0, 0), (8, 0), (16, 0), (24, 0), (76, 3), (68, 0)))}
+    out, indices = bytearray(x), set()
+    for sig, at, num in L['inst']:
+        if sig not in nodes: continue
+        for i in range(num):
+            for field in (16, 24):
+                target, count = struct.unpack_from('<II', pc, at + sig[0] * i + field)
+                target += R
+                if not count or target < R or target + count * 2 > len(pc): continue
+                for k in range(count):
+                    word = target + 2 * k
+                    out[word:word + 2] = pc[word:word + 2][::-1]
+                    indices.add(word)
+    return bytes(out), len(indices)
+
+
+def fix_generate_indices(pc, x):
+    """Generate-control resource references are u16 indices, not byte flags.
+
+    The native 828F0F18/828F0F60 accessors read a unit's +8 group table,
+    then index its referenced resource list with lhz. Require both serialized
+    class signatures and bounded tables before changing any target bytes.
+    """
+    L = layout(pc)
+    if L is None or len(pc) != len(x): return x, 0
+    unit = (36, ((24, 0), (0, 0), (8, 0), (16, 0)))
+    group = (8, ((0, 0),))
+    ranges = [(at, at + num * 8) for sig, at, num in L['inst'] if sig == group]
+    out, indices = bytearray(x), set()
+    for sig, at, num in L['inst']:
+        if sig != unit: continue
+        for i in range(num):
+            target, count = struct.unpack_from('<II', pc, at + 36 * i + 8)
+            target += R
+            if not count or not any(lo <= target and target + count * 8 <= hi for lo, hi in ranges): continue
+            for j in range(count):
+                offset, size = struct.unpack_from('<II', pc, target + 8 * j)
+                offset += R
+                if not size or offset < R or offset + size * 2 > len(pc): continue
+                for k in range(size):
+                    word = offset + 2 * k
+                    out[word:word + 2] = pc[word:word + 2][::-1]
+                    indices.add(word)
+    return bytes(out), len(indices)
+
+
 def fix_curves(pc, x):
     """Effect curve records: {u8 mode, u8 components, u16 zero, floats[]}.
 

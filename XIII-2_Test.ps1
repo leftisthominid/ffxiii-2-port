@@ -651,8 +651,8 @@ $missing = @(if ($runLogs) { Select-String -LiteralPath $runLogs -Pattern "NtCre
 Say ''
 Say 'Summary' 'Cyan'
 Say "  log lines: $lineCount; access violations: $av"
-if ($runLogs -and -not (Select-String -LiteralPath $runLogs -Pattern 'XIII-2 build: test v39' -Quiet)) {
-  Say '  THE GAME THAT RAN IS AN OLDER BUILD (no "XIII-2 build: test v39" line in the log)' 'Red'
+if ($runLogs -and -not (Select-String -LiteralPath $runLogs -Pattern 'XIII-2 build: test v40' -Quiet)) {
+  Say '  THE GAME THAT RAN IS AN OLDER BUILD (no "XIII-2 build: test v40" line in the log)' 'Red'
 }
 if ($runLogs -and -not (Select-String -LiteralPath $runLogs -Pattern 'XEX patch applied successfully' -Quiet)) {
   Say '  THE TITLE UPDATE PATCH WAS NOT APPLIED (no "XEX patch applied" line in the log)' 'Red'
