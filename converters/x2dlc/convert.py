@@ -252,6 +252,8 @@ class Converter:
                 y = qix.apply_property_targets(pc, y, self._qix_properties)
                 y, indices = qix.fix_generate_indices(pc, y)
                 if indices: self.note('effect resource indices (u16)', indices)
+                y, indices = qix.fix_particle_references(pc, y)
+                if indices: self.note('particle resource references (s16)', indices)
             y = qix.keep_text(pc, y, qix.layout(pc))
             y, _ = qix.fix(pc, bytes(y))           # the exact parts last
             y, _ = qix.fix_game(pc, y)

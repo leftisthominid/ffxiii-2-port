@@ -103,6 +103,19 @@ def material_of(name):
     n = n.rsplit('.', 1)[0]
     return n.rsplit('_', 1)[0] if n[-4:-3] == '_' and n[-3:].isdigit() else n
 
+def compiled_pixel_kind(kind, prog):
+    """Reserve the alpha driver that the compiled program actually uses.
+
+    PixelShader's constructor counts bit 0x100 to allocate driver slots; its
+    loader independently creates that driver when CTAB contains alphaOffset.
+    Compilation can introduce this 360-only constant even for PC kinds absent
+    from the learned kind map. Keep the two native decisions consistent.
+    """
+    from . import xengine
+    ct, _, _, is_pixel = xengine.container_info(prog)
+    if not is_pixel: raise ValueError('pixel kind requires a pixel shader')
+    return (kind & ~0x100) | (0x100 if any(c['name'] == b'alphaOffset' for c in ct['consts']) else 0)
+
 class Context:
     """programs not in the library: pixel shaders compiled (xcompile), linked to the 360 vertex
     shader of the same material; a vertex shader not in the library: the library's vertex shader
@@ -171,6 +184,7 @@ class Context:
                     raise xcompile.CompileError('no vertex shader for ' + mat)
                 prog = xcompile.compile_ps(e['prog'], interp, hsh, self.engine, folder=self.folder)
                 kind = self.engine.get('kinds', {}).get(e['kind'], e['kind'] + 0x100 if (e['kind'] & 0xF00) == 0x200 else e['kind'])
+                kind = compiled_pixel_kind(kind, prog)
                 res = (prog, kind)
                 self.note('pixel shader compiled')
         except Exception as ex:
