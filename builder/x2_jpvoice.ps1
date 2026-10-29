@@ -1,7 +1,7 @@
 # FFXIII-2 Japanese voices: the Steam version's Japanese voice lines and lip-sync, converted to
 # the 360 layout (converters\x2_jpvoice.cpp) into <game folder>\jpvoice as an update patch. The
 # game mounts it when Settings > Port Settings > Voice Language is Japanese.
-$script:X2JpVoiceVersion = '4'
+$script:X2JpVoiceVersion = '5'
 
 # Built again whenever the source changed (by content: a zip's file dates can be older than an
 # earlier build).
@@ -20,7 +20,7 @@ function Build-X2Converter($t, [string]$source, [string]$exe) {
 # in <out>\NNNNNNN\ (the port opens those copies while the voices are Japanese). Once per package
 # and converter version.
 # 2: the lines too large at 24 kHz go down to 16, 11, or 8 kHz; the DLC scenes' Japanese lip-sync.
-$script:X2JpDlcVersion = '3'
+$script:X2JpDlcVersion = '4'
 function Convert-X2JpDlcVoices($t, [string]$steam, [string]$ffmpeg, [string]$dlcRoot, [string]$out, [string]$work, [string]$logs) {
   if (-not (Test-Path -LiteralPath $dlcRoot)) { Say '  no DLC packages installed'; return }
   $exe = Join-Path $work 'x2_jpvoice.exe'
@@ -108,20 +108,7 @@ function Convert-X2JpVoice($t, [string]$game, [string]$steam, [string]$ffmpeg, [
     Say "  already converted ($out)"
     return
   }
-  # Version 3 differs from 4 only by the Japanese lip-sync / facial motion files, which broke
-  # Serah (she did not load after a save was loaded): they are taken out of its file lists.
-  if ($have -eq '3' -and (Test-Path -LiteralPath (Join-Path $out 'jp_lipsync.txt'))) {
-    $exe = Join-Path $work 'x2_jpvoice.exe'
-    Build-X2Converter $t (Join-Path $PSScriptRoot '..\converters\x2_jpvoice.cpp') $exe
-    Say '  taking the Japanese lip-sync files out of the voice patch...'
-    $log = Join-Path $logs 'jpvoice_strip.log'
-    $rc = Invoke-Logged $exe @('--strip-lipsync', $out) $log
-    Get-Content -LiteralPath $log -ErrorAction SilentlyContinue | ForEach-Object { Say "    $_" }
-    if ($rc -ne 0) { throw "taking the lip-sync files out failed; see $log" }
-    Set-Content -LiteralPath $versionFile -Value $script:X2JpVoiceVersion
-    Say "  Japanese voices in $out (the 360 lip movements stay)"
-    return
-  }
+  # Rebuild older voice patches: their code-only matches may select another line.
   $exe = Join-Path $work 'x2_jpvoice.exe'
   Say '  building the converter...'
   Build-X2Converter $t (Join-Path $PSScriptRoot '..\converters\x2_jpvoice.cpp') $exe
