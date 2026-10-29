@@ -305,6 +305,9 @@ foreach ($d in @('default') + $script:X2Modules) {
   Say ("  ${d}: interrupt lock " + (Update-PchIrqLock (Join-Path $g 'ffxiii2_pch.h') (Join-Path $project 'lr_guest_irq.inc')) + '; ' + (Add-MemoryBarriers $g))
 }
 
+Say ('  ' + (Update-X2OggPoolRange (Join-Path $generated 'default')))
+Say ('  ' + (Add-X2SlotStateTrace (Join-Path $generated 'z0130')))
+
 # --- 4. build
 Say '[4/9] Building ffxiii2.exe and the zone module DLLs'
 $cfg = @('-S', $project, '-B', $build) + (Get-CMakeToolArgs $t)
@@ -651,8 +654,8 @@ $missing = @(if ($runLogs) { Select-String -LiteralPath $runLogs -Pattern "NtCre
 Say ''
 Say 'Summary' 'Cyan'
 Say "  log lines: $lineCount; access violations: $av"
-if ($runLogs -and -not (Select-String -LiteralPath $runLogs -Pattern 'XIII-2 build: test v40' -Quiet)) {
-  Say '  THE GAME THAT RAN IS AN OLDER BUILD (no "XIII-2 build: test v40" line in the log)' 'Red'
+if ($runLogs -and -not (Select-String -LiteralPath $runLogs -Pattern 'XIII-2 build: test v41' -Quiet)) {
+  Say '  THE GAME THAT RAN IS AN OLDER BUILD (no "XIII-2 build: test v41" line in the log)' 'Red'
 }
 if ($runLogs -and -not (Select-String -LiteralPath $runLogs -Pattern 'XEX patch applied successfully' -Quiet)) {
   Say '  THE TITLE UPDATE PATCH WAS NOT APPLIED (no "XEX patch applied" line in the log)' 'Red'

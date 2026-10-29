@@ -141,6 +141,12 @@ def read_list(path_or_bytes):
             raw = stream.read()
     else:
         raw = path_or_bytes
+    # The Japanese-voice builder emits the game's supported headerless lists.
+    # Their offsets are relative to byte zero, unlike encrypted media lists.
+    if len(raw) >= 12:
+        table, data, count = struct.unpack_from('<III', raw)
+        if table == 12 + 8 * count and table <= data <= len(raw):
+            return parse_plain(bytes(32) + raw)
     plain, ok = wf.decrypt(raw)
     if not ok: raise ValueError('filelist checksum mismatch')
     return parse_plain(plain)

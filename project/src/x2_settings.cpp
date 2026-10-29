@@ -163,8 +163,10 @@ void apply_confirm(uint8_t* base) {
 void X2SettingsLoad() { load(); }
 
 int X2ConfigGetSkipStoryRecaps() { return (load(), g_skip_story_recaps.load()); }
+void X2ApplyStoryRecapSetting(int skip);
 void X2ConfigSetSkipStoryRecaps(int skip) {
   g_skip_story_recaps.store(skip ? 1 : 0);
+  X2ApplyStoryRecapSetting(skip);
   X2WriteSetting("story_recaps.txt", skip ? "off" : "on");
   REXLOG_INFO("XIII-2 Story Recaps: {}", skip ? "off" : "on");
 }

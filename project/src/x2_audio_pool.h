@@ -2,6 +2,7 @@
 // 768 KiB input-buffer heap runs out at about twelve 64 KiB streams, even when
 // the decoder and the game's other heaps have memory available. Change both
 // the backing allocation and heap extent at the two verified Ogg-init calls.
+// builder/patches.ps1 also updates the reader's literal bounds check to 4 MiB.
 #pragma once
 #include <cstdint>
 
