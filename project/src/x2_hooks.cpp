@@ -82,6 +82,19 @@ REX_HOOK_RAW(sub_828510C8) {
 #include "x2_module_paths.h"
 #include "x2_audio_pool.h"
 #include "x2_jp_dlc_provenance.h"
+#include "x2_motion_init.h"
+
+REX_EXTERN(__imp__sub_82B03110);
+REX_HOOK_RAW(sub_82B03110) {
+  std::lock_guard<std::mutex> lock(X2MotionInitializationMutex());
+  __imp__sub_82B03110(ctx, base);
+}
+
+REX_EXTERN(__imp__sub_82B03178);
+REX_HOOK_RAW(sub_82B03178) {
+  std::lock_guard<std::mutex> lock(X2MotionInitializationMutex());
+  __imp__sub_82B03178(ctx, base);
+}
 
 namespace {
 uint32_t x2_be32(uint8_t* base, uint32_t address) {

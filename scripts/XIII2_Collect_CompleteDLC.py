@@ -42,14 +42,19 @@ def collect_generated(folder, emit, note, progress=lambda path:None, limit=1<<20
 def main(argv=None):
     p=argparse.ArgumentParser();p.add_argument('--source',required=True);p.add_argument('--out',required=True)
     p.add_argument('--game-output',default=r'C:\FFXIII-2 Test');p.add_argument('--steam',default=r'C:\Program Files (x86)\Steam\steamapps\common\FINAL FANTASY XIII-2');p.add_argument('--base-game',default=r'C:\FFXIII-2\360\game')
+    p.add_argument('--session');p.add_argument('--no-explorer',action='store_true')
     a=p.parse_args(argv);sys.path.insert(0,str(Path(a.source)/'converters'))
     from x2dlc import archive,gameindex
     root=Path(a.game_output);out=Path(a.out);upload=out/'Upload-these-zips';upload.mkdir(parents=True,exist_ok=True)
     if list(upload.glob('*.zip')):raise SystemExit('Use a new output directory; existing ZIPs are retained.')
-    manifest_path=root/'work/steamdlc/steam_manifest.json';manifest=json.loads(manifest_path.read_text(encoding='utf-8-sig'))
-    wanted={gameindex.norm(e[-1])for pack in manifest['packs'].values()for group in pack['lists']for e in group['files']}
+    manifest_path=root/'work/steamdlc/steam_manifest.json';manifest_problem=None
+    try:
+        manifest=json.loads(manifest_path.read_text(encoding='utf-8-sig'))
+        wanted={gameindex.norm(e[-1])for pack in manifest['packs'].values()for group in pack['lists']for e in group['files']}
+    except (OSError,ValueError,KeyError,TypeError) as ex:
+        manifest_problem='Steam inventory unavailable: '+repr(ex);wanted=set()
     regions=('white_z0070','white_z0130','white_z0160','white_z0161')
-    records=[];notes=[];stored=set();state={'phase':'Indexing','assets':0,'unique':0,'raw_bytes':0,'zip_bytes':0};stop=threading.Event()
+    records=[];notes=[manifest_problem] if manifest_problem else [];stored=set();state={'phase':'Indexing','assets':0,'unique':0,'raw_bytes':0,'zip_bytes':0};stop=threading.Event()
     def heartbeat():
         while not stop.wait(15):print('Collecting: '+state['phase']+'; '+str(state['assets'])+' assets, '+str(state['unique'])+' unique; '+str(state['zip_bytes']//(1<<20))+' MB in upload ZIPs',flush=True)
     threading.Thread(target=heartbeat,daemon=True).start()
@@ -107,6 +112,18 @@ def main(argv=None):
     pieces=Pieces();fatal=None;indexes=[]
     try:
         with tarfile.open(fileobj=pieces,mode='w|gz',compresslevel=6)as t:
+            if a.session:
+                for name in ('steps.txt','failure.txt','source-version.json'):
+                    f=Path(a.session)/name
+                    if f.is_file():t.add(f,arcname='session/'+name,recursive=False)
+            for f in sorted((root/'logs/run-history').rglob('*.log')):
+                if f.is_file():t.add(f,arcname='logs/run-history/'+f.relative_to(root/'logs/run-history').as_posix(),recursive=False)
+            for parent,label in [(root/'logs','logs'),(root/'work/steamdlc','learning'),(root/'run/jpvoice_dlc','voice-reports')]:
+                if not parent.is_dir():continue
+                for f in sorted(parent.glob('*')):
+                    allowed = (label == 'logs' and (f.suffix.lower() == '.log' or re.fullmatch(r'jpvoice_dlc_.*\.csv',f.name))) or (label == 'learning' and f.name in ('base_data.pkl','dlc_known.pkl','build_report.json','steam_manifest.json','learn_version.txt','dlc_known_version.txt','compare.txt','moved_360_packages.txt')) or (label == 'voice-reports' and re.fullmatch(r'\d{7}(?:_.*\.csv|\.txt)',f.name))
+                    if f.is_file() and allowed:
+                        state['phase']=label+' '+f.name;t.add(f,arcname=label+'/'+f.name,recursive=False)
             english=gameindex.GameIndex(a.steam,'win32',log=print);indexes.append(english)
             en_wanted=wanted|{k.replace('movie/','movie_win/',1)for k in wanted}|extra_sources(english)
             for key in sorted(wanted):
@@ -134,12 +151,6 @@ def main(argv=None):
                         except Exception as ex:notes.append(str(fl)+': '+repr(ex))
                     for f in folder.glob('*'):
                         if f.is_file() and (f.name == 'identifier' or re.fullmatch(r'(?:source_|verified_)filelist_p\d{7}(?:img|scr)_u\.x360\.bin',f.name) or f.name in ('x2dlc_keys_img.json','x2dlc_keys_scr.json')):t.add(f,arcname='package-metadata/'+label+'/'+folder.name+'/'+f.name,recursive=False)
-            for parent,label in [(root/'logs','logs'),(root/'work/steamdlc','learning'),(root/'run/jpvoice_dlc','voice-reports')]:
-                if not parent.is_dir():continue
-                for f in sorted(parent.glob('*')):
-                    allowed = (label == 'logs' and (f.suffix.lower() == '.log' or re.fullmatch(r'jpvoice_dlc_.*\.csv',f.name))) or (label == 'learning' and f.name in ('base_data.pkl','dlc_known.pkl','build_report.json','steam_manifest.json','learn_version.txt','dlc_known_version.txt','compare.txt','moved_360_packages.txt')) or (label == 'voice-reports' and re.fullmatch(r'\d{7}(?:_.*\.csv|\.txt)',f.name))
-                    if f.is_file() and allowed:
-                        state['phase']=label+' '+f.name;t.add(f,arcname=label+'/'+f.name,recursive=False)
             for f in sorted((root/'userdata/0000000000000000/53510806/Headers/00000002').glob('*.header')):t.add(f,arcname='content-headers/'+f.name,recursive=False)
             for name in ('aa.txt','confirm.txt','fps.txt','fps_trial.txt','story_recaps.txt','text.txt','ui_style.txt','voice.txt','keyboard.txt','x2_missing_movies.txt'):
                 f=root/'userdata'/name
@@ -154,7 +165,7 @@ def main(argv=None):
         pieces.finish();stop.set()
     (out/'collection-status.json').write_bytes(json_bytes(dict(state,notes=notes,fatal=fatal)))
     print('Ready: '+str(upload)+'; '+str(len(pieces.parts))+' data ZIPs plus Index. Collection errors: '+str(len(notes)),flush=True)
-    open_upload_folder(upload)
+    if not a.no_explorer:open_upload_folder(upload)
     if fatal or notes:raise SystemExit('Upload all ZIPs and collection-status.json; collection errors are recorded.')
 
 if __name__ == '__main__':

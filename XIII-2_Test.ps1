@@ -27,7 +27,8 @@ param(
   [switch]$DlcSample,         # only: a sample of the Steam and 360 DLC files (XIII-2_DLC_Sample.zip in Downloads)
   [ValidateSet('', 'compare', 'install', 'restore', 'export')]
   [string]$SteamDlc = '',     # only: the DLC from the Steam version (builder\x2_steamdlc.ps1): compare / install / restore / export
-  [string]$DlcOnly = ''       # with -SteamDlc compare: only the files under these paths (comma-separated), all of them in the report
+  [string]$DlcOnly = '',      # with -SteamDlc compare: only the files under these paths (comma-separated), all of them in the report
+  [switch]$SkipLegacyLogZip   # the source launcher streams one comprehensive collection instead
 )
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
@@ -61,6 +62,7 @@ function Ask-YesNo([string]$question) {
 . (Join-Path $Here 'builder\x2_jpvoice.ps1')
 . (Join-Path $Here 'builder\x2_ui.ps1')
 . (Join-Path $Here 'builder\x2_steamdlc.ps1')
+. (Join-Path $Here 'builder\x2_runlogs.ps1')
 
 function Invoke-Logged([string]$exe, [string[]]$arguments, [string]$log, [string]$cwd = '', [switch]$Quiet) {
   New-Item -ItemType Directory -Force -Path (Split-Path $log) | Out-Null
@@ -619,7 +621,8 @@ if (Test-Path -LiteralPath $app) { Copy-Item -LiteralPath $app -Destination (Joi
 # --- 9. run
 Say '[9/9] Running FFXIII-2'
 $runLog = Join-Path $logs 'run.log'
-Get-ChildItem -LiteralPath $logs -Filter 'run*.log' -ErrorAction SilentlyContinue | Remove-Item -Force
+$previousRuns = Save-X2RunLogs $logs
+if ($previousRuns) { Say "  previous run logs preserved in $previousRuns" }
 $gameArgs = @("--game_data_root=$gameRun", "--user_data_root=$(Join-Path $Out 'userdata')", '--gpu_plugin=xenos',
           '--graphics_backend=d3d12', "--log_file=$runLog", '--log_max_file_size_mb=300')
 $quoted = ($gameArgs | ForEach-Object { [LrRun]::Quote($_) }) -join ' '
@@ -657,8 +660,8 @@ $missing = @(if ($runLogs) { Select-String -LiteralPath $runLogs -Pattern "NtCre
 Say ''
 Say 'Summary' 'Cyan'
 Say "  log lines: $lineCount; access violations: $av"
-if ($runLogs -and -not (Select-String -LiteralPath $runLogs -Pattern 'XIII-2 build: test v43' -Quiet)) {
-  Say '  THE GAME THAT RAN IS AN OLDER BUILD (no "XIII-2 build: test v43" line in the log)' 'Red'
+if ($runLogs -and -not (Select-String -LiteralPath $runLogs -Pattern 'XIII-2 build: test v44' -Quiet)) {
+  Say '  THE GAME THAT RAN IS AN OLDER BUILD (no "XIII-2 build: test v44" line in the log)' 'Red'
 }
 if ($runLogs -and -not (Select-String -LiteralPath $runLogs -Pattern 'XEX patch applied successfully' -Quiet)) {
   Say '  THE TITLE UPDATE PATCH WAS NOT APPLIED (no "XEX patch applied" line in the log)' 'Red'
@@ -684,9 +687,13 @@ foreach ($f in $crash | Select-Object -First 14) {
   Say "  $f" 'Yellow'
 }
 if ($missing.Count) { Say "  files the game looked for and did not find ($($missing.Count)):"; $missing | Select-Object -First 12 | ForEach-Object { Say "    $_" } }
-$downloads = Join-Path $HOME 'Downloads'
-$zip = Join-Path $downloads 'XIII-2_Test_Logs.zip'
-if (Test-Path -LiteralPath $zip) { Remove-Item -LiteralPath $zip -Force }
-Compress-Archive -Path (Join-Path $logs '*') -DestinationPath $zip
-Say ''
-Say ("Done in {0:hh\:mm\:ss}. Upload this file: {1}" -f $sw.Elapsed, $zip) 'Green'
+if ($SkipLegacyLogZip) {
+  Say '  the source launcher will collect all results after the game sessions finish'
+} else {
+  $downloads = Join-Path $HOME 'Downloads'
+  $zip = Join-Path $downloads 'XIII-2_Test_Logs.zip'
+  if (Test-Path -LiteralPath $zip) { Remove-Item -LiteralPath $zip -Force }
+  Compress-Archive -Path (Join-Path $logs '*') -DestinationPath $zip
+  Say ''
+  Say ("Done in {0:hh\:mm\:ss}. Upload this file: {1}" -f $sw.Elapsed, $zip) 'Green'
+}

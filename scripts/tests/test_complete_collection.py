@@ -20,6 +20,37 @@ spec.loader.exec_module(collector)
 
 
 class CompleteCollection(unittest.TestCase):
+    def test_collection_preserves_failure_logs_without_inventory_or_steam(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp); game = root/'game'; session = root/'session'
+            (game/'logs').mkdir(parents=True); session.mkdir()
+            (game/'logs/build.log').write_text('compiler failure fixture')
+            history = game/'logs/run-history/earlier-run'
+            history.mkdir(parents=True)
+            (history/'run.log').write_text('earlier run retained')
+            (session/'failure.txt').write_text('installation failed fixture')
+            (session/'private-context.txt').write_text('PRIVATE')
+            result = subprocess.run([sys.executable, str(SCRIPT), '--source', str(ROOT), '--out', str(session),
+                                     '--session', str(session), '--game-output', str(game), '--steam', str(root/'missing'),
+                                     '--no-explorer'], capture_output=True, text=True)
+            self.assertNotEqual(result.returncode, 0)
+            upload = session/'Upload-these-zips'
+            with zipfile.ZipFile(upload/'XIII-2_DLC_Complete_Index.zip') as z:
+                manifest = json.loads(z.read('manifest.json'))
+            chunks = []
+            for part in manifest:
+                with zipfile.ZipFile(upload/part['zip']) as z: chunk = z.read(part['entry'])
+                self.assertEqual(hashlib.sha256(chunk).hexdigest(), part['sha256'])
+                chunks.append(chunk)
+            with tarfile.open(fileobj=io.BytesIO(b''.join(chunks))) as t:
+                self.assertEqual(t.extractfile('logs/build.log').read(), b'compiler failure fixture')
+                self.assertEqual(t.extractfile('logs/run-history/earlier-run/run.log').read(), b'earlier run retained')
+                self.assertEqual(t.extractfile('session/failure.txt').read(), b'installation failed fixture')
+                self.assertFalse(any('private-context' in n for n in t.getnames()))
+            status = json.loads((session/'collection-status.json').read_text())
+            self.assertTrue(status['fatal'])
+            self.assertTrue(any('inventory unavailable' in n for n in status['notes']))
+
     def test_windows_opens_the_upload_folder_without_a_shell(self):
         with patch.object(collector.sys, 'platform', 'win32'), patch.object(collector.os, 'startfile', create=True) as start:
             collector.open_upload_folder('C:/test/Upload-these-zips')
