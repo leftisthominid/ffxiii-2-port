@@ -43,6 +43,7 @@
 #include <string>
 #include <tuple>
 #include <vector>
+#include "../project/src/x2_jp_dlc_provenance.h"
 #if defined(_WIN32)
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
@@ -1356,6 +1357,17 @@ static Ref japanese_voice(const Entry& english, const std::map<std::string, Ref>
   return it->second;
 }
 
+template <class Ref>
+static Ref steam_english_voice(const Entry& english, const std::map<std::string, Ref>& byPath) {
+  std::string path = lower(english.path);
+  if (!is_english_voice(path)) return {};
+  const auto platform = path.find(".x360.");
+  if (platform != std::string::npos) path.replace(platform, 6, ".win32.");
+  const auto it = byPath.find(path);
+  if (it == byPath.end() || !it->second.e || it->second.e->ftype != english.ftype) return {};
+  return it->second;
+}
+
 // One output archive and its list: the base files' patch (white_patch_u, which the game also
 // checks for the zone files) or the scenario files' patch (white_patch_scr_u).
 struct PatchOut {
@@ -1390,14 +1402,17 @@ static int build(const fs::path& root360, const fs::path& rootSteam, const fs::p
   struct Ref { Source* src; const Entry* e; };
   typedef std::pair<uint8_t, uint32_t> Key;
   std::map<Key, Ref> jpByCode, enByCode;
-  std::map<std::string, Ref> jpByPath;
+  std::map<std::string, Ref> jpByPath, enByPath;
   for (auto& s : jp)
     for (auto& e : s.entries) {
       jpByCode.emplace(Key(e.ftype, e.code), Ref{&s, &e});
       jpByPath.emplace(lower(e.path), Ref{&s, &e});
     }
   for (auto& s : en)
-    for (auto& e : s.entries) enByCode.emplace(Key(e.ftype, e.code), Ref{&s, &e});
+    for (auto& e : s.entries) {
+      enByCode.emplace(Key(e.ftype, e.code), Ref{&s, &e});
+      enByPath.emplace(lower(e.path), Ref{&s, &e});
+    }
 
   fs::create_directories(outDir);
   FILE* report = fopen((outDir / "report.csv").string().c_str(), "w");
@@ -1534,9 +1549,9 @@ static int build(const fs::path& root360, const fs::path& rootSteam, const fs::p
       t->jb = jobs[i].second.src->archive->read(*jobs[i].second.e);
       // The same bytes in Steam's English set: not a voice in another language (music, monster
       // sounds); the 360 file stays.
-      auto ie = enByCode.find({ue.ftype, ue.code});
-      if (ie != enByCode.end() && ie->second.e->usize == t->jb.size() &&
-          ie->second.src->archive->read(*ie->second.e) == t->jb)
+      const Ref english = steam_english_voice(ue, enByPath);
+      if (english.e && english.e->usize == t->jb.size() &&
+          english.src->archive->read(*english.e) == t->jb)
         t->why = "the same in both languages on Steam";
     } catch (const std::exception& ex) {
       t->why = ex.what();
@@ -1937,6 +1952,84 @@ static int merge_update(const fs::path& tu, const fs::path& voices, const fs::pa
 }
 
 // ---------------------------------------------------------------- DLC voices
+static bool verify_jp_dlc(const fs::path& pkg, const fs::path& copy, const std::string& id,
+                          std::string& reason, const std::function<void(uint64_t)>& progress = {}) {
+  if (!X2JpDlcCurrent(pkg, copy, id, reason, progress)) return false;
+  using Key = std::pair<uint8_t, uint32_t>;
+  size_t checked = 0, voices = 0, lips = 0;
+  uint64_t audited_bytes = 0;
+  auto scd_ok = [](const Bytes& before, const Bytes& after) {
+    Scd a, b; std::string why;
+    if (!parse_scd(before, a, why) || !parse_scd(after, b, why) || !b.be || a.metas.size() != b.metas.size()) return false;
+    for (const auto off : b.metas) {
+      OggInfo info;
+      if (!check_stream(after.data() + off, after.size() - off, true, info, why)) return false;
+    }
+    return true;
+  };
+  try {
+    for (const char* kind : {"img", "scr"}) {
+      const std::string suffix = "p" + id + kind + "_u.x360.bin";
+      const auto fl = copy / ("filelist_" + suffix);
+      if (!fs::is_regular_file(fl)) continue;
+      const auto originals = parse_filelist(read_file(pkg / fl.filename()));
+      const auto entries = parse_filelist(read_file(fl));
+      std::map<Key, const Entry*> by_key;
+      for (const auto& e : originals)
+        if (!by_key.emplace(Key{e.ftype, e.code}, &e).second) throw std::runtime_error("duplicate source ID");
+      if (entries.size() != by_key.size()) throw std::runtime_error("entry count changed");
+      Archive source(pkg / ("white_" + suffix)), active(copy / ("white_" + suffix));
+      Key previous{}; bool first = true;
+      for (const auto& e : entries) {
+        const Key key{e.ftype, e.code};
+        if (!first && key <= previous) throw std::runtime_error("Japanese index is not strictly sorted");
+        first = false; previous = key;
+        const auto it = by_key.find(key);
+        if (it == by_key.end() || it->second->path != e.path) throw std::runtime_error("file identity changed: " + e.path);
+        const Entry& original = *it->second;
+        if (original.sector > source.size / 2048 || original.csize > source.size - original.sector * 2048)
+          throw std::runtime_error("entry outside installed archive: " + e.path);
+        if (e.sector > active.size / 2048 || e.csize > active.size - e.sector * 2048)
+          throw std::runtime_error("entry outside Japanese archive: " + e.path);
+        checked++;
+        if (progress) progress(audited_bytes += e.csize);
+        if (e.sector == original.sector && e.usize == original.usize && e.csize == original.csize) continue;
+        const std::string p = lower(e.path);
+        const bool lip = (!p.compare(0, 15, "event/schedule/") && p.find("/dataset/") != std::string::npos) ||
+                         !p.compare(0, 9, "zone/lip/") ||
+                         (!p.compare(0, 8, "mot/mon/") && p.find("lsdpack") != std::string::npos);
+        if (!is_english_voice(p)) {
+          if (!lip) throw std::runtime_error("non-voice asset changed: " + e.path);
+          // Lip-sync is intentionally allowed to change; this is not a semantic
+          // comparison of its animation against the Steam Japanese source.
+          active.read(e); lips++; continue;
+        }
+        if (uint64_t(e.usize) > uint64_t(original.usize) + original.usize / 50)
+          throw std::runtime_error("voice exceeds installed allocation budget: " + e.path);
+        const Bytes before = source.read(original), after = active.read(e);
+        if (p.compare(p.size() - 4, 4, ".scd") == 0) {
+          if (!scd_ok(before, after)) throw std::runtime_error("invalid Japanese voice streams: " + e.path);
+        } else {
+          bool abe, bbe; std::vector<WpdEntry> a, b;
+          if (!parse_wpd(before, abe, a) || !parse_wpd(after, bbe, b) || !bbe || a.size() != b.size())
+            throw std::runtime_error("invalid Japanese voice bank: " + e.path);
+          for (size_t i = 0; i < a.size(); i++) {
+            if (a[i].name != b[i].name || a[i].ext != b[i].ext) throw std::runtime_error("voice bank member identity changed");
+            Bytes old_member(before.begin() + a[i].off, before.begin() + a[i].off + a[i].size);
+            Bytes new_member(after.begin() + b[i].off, after.begin() + b[i].off + b[i].size);
+            if (old_member != new_member && (a[i].ext != "scd" || !scd_ok(old_member, new_member)))
+              throw std::runtime_error("invalid replacement voice bank member: " + a[i].name);
+          }
+        }
+        voices++;
+      }
+    }
+  } catch (const std::exception& ex) { reason = ex.what(); return false; }
+  reason = "current; " + std::to_string(checked) + " indexed files, " + std::to_string(voices) +
+           " replacement voice files structurally checked, " + std::to_string(lips) + " lip-sync files (semantics not compared)";
+  return true;
+}
+
 // A 360 DLC package's voices in Japanese. The Steam version has the DLC in its own archives,
 // so its Japanese set holds the DLC's Japanese voices too. For each file list of an installed
 // package (filelist_pNNNNNNN{img,scr}_u.x360.bin with its white_p... archive), the archive is
@@ -1981,14 +2074,17 @@ static int dlc_voices(const fs::path& rootSteam, const fs::path& pkg, const fs::
   typedef std::pair<uint8_t, uint32_t> Key;
   struct Ref { Source* src; const Entry* e; };
   std::map<Key, Ref> jpByCode, enByCode;
-  std::map<std::string, Ref> jpByPath;
+  std::map<std::string, Ref> jpByPath, enByPath;
   for (auto& s : jp)
     for (auto& e : s.entries) {
       jpByCode.emplace(Key(e.ftype, e.code), Ref{&s, &e});
       jpByPath.emplace(lower(e.path), Ref{&s, &e});
     }
   for (auto& s : en)
-    for (auto& e : s.entries) enByCode.emplace(Key(e.ftype, e.code), Ref{&s, &e});
+    for (auto& e : s.entries) {
+      enByCode.emplace(Key(e.ftype, e.code), Ref{&s, &e});
+      enByPath.emplace(lower(e.path), Ref{&s, &e});
+    }
 
   int total_ok = 0;
   for (auto& [l, ents] : todo) {
@@ -2049,8 +2145,8 @@ static int dlc_voices(const fs::path& rootSteam, const fs::path& pkg, const fs::
         try {
           ts[k].ub = arc.read(ue);
           ts[k].jb = jobs[b0 + k].second.src->archive->read(*jobs[b0 + k].second.e);
-          auto ie = enByCode.find({ue.ftype, ue.code});
-          if (ie != enByCode.end() && ie->second.e->usize == ts[k].jb.size() && ie->second.src->archive->read(*ie->second.e) == ts[k].jb)
+          const Ref english = steam_english_voice(ue, enByPath);
+          if (english.e && english.e->usize == ts[k].jb.size() && english.src->archive->read(*english.e) == ts[k].jb)
             ts[k].why = "the same in both languages on Steam";
         } catch (const std::exception& ex) {
           ts[k].why = ex.what();
@@ -2157,9 +2253,27 @@ static int dlc_voices(const fs::path& rootSteam, const fs::path& pkg, const fs::
     if (fs::exists(finalArc)) fs::remove(finalArc);
     fs::rename(outArc, finalArc);
     write_filelist(dir / l.list.filename(), files);
+    write_file(dir / ("source_" + l.list.filename().string()), read_file(l.list));
+    write_file(dir / ("verified_" + l.list.filename().string()), read_file(dir / l.list.filename()));
     printf("%s: %d voices in Japanese, %d kept English -> %s\n", l.name.c_str(), ok - lipOk, kept, dir.string().c_str());
     fflush(stdout);
     total_ok += ok;
+  }
+  std::set<std::string> validated;
+  for (const auto& item : todo) {
+    if (!validated.insert(item.first.id).second) continue;
+    std::string reason;
+    auto last = std::chrono::steady_clock::now();
+    const auto progress = [&](uint64_t done) {
+      const auto now = std::chrono::steady_clock::now();
+      if (now - last >= std::chrono::seconds(10)) {
+        printf("  validating Japanese DLC %s: %llu MiB\n", item.first.id.c_str(),
+               (unsigned long long)(done >> 20));
+        fflush(stdout); last = now;
+      }
+    };
+    if (!verify_jp_dlc(pkg, outDir / item.first.id, item.first.id, reason, progress))
+      throw std::runtime_error("Japanese DLC provenance: " + reason);
   }
   return total_ok ? 0 : 2;
 }
@@ -2343,6 +2457,19 @@ int main(int argc, char** argv) {
     }
   } tmp_cleanup;
   try {
+    if (argc == 5 && !strcmp(argv[1], "--verify-dlc")) {
+      std::string reason;
+      auto last = std::chrono::steady_clock::now();
+      const bool ok = verify_jp_dlc(argv[2], argv[3], argv[4], reason, [&](uint64_t done) {
+        const auto now = std::chrono::steady_clock::now();
+        if (now - last >= std::chrono::seconds(10)) {
+          printf("  validating Japanese DLC: %llu MiB\n", (unsigned long long)(done >> 20));
+          fflush(stdout); last = now;
+        }
+      });
+      printf("Japanese DLC provenance: %s\n", reason.c_str());
+      return ok ? 0 : 1;
+    }
     if (argc == 5 && (!strcmp(argv[1], "--scd") || !strcmp(argv[1], "--wpd"))) {
       Bytes us = read_file(argv[2]), jp = read_file(argv[3]), out;
       std::string why;

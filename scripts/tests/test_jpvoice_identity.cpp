@@ -18,6 +18,16 @@ int main() {
   // A different Japanese file code is valid when the normalized path matches.
   // The old code-first selection chose collision instead.
   assert(japanese_voice(english, japanese).e == &correct);
+  Entry steam_en = english;
+  steam_en.code = 789;
+  steam_en.path = "sound/pack/usa/cszb/line.win32.scd";
+  Entry wrong_en = steam_en;
+  wrong_en.code = english.code;
+  wrong_en.path = "sound/pack/usa/clzb/unrelated.win32.scd";
+  std::map<std::string, Ref> english_set{{steam_en.path, {&steam_en}}, {wrong_en.path, {&wrong_en}}};
+  assert(steam_english_voice(english, english_set).e == &steam_en);
+  english_set.erase(steam_en.path);
+  assert(steam_english_voice(english, english_set).e == nullptr);
   japanese.erase(correct.path);
   assert(japanese_voice(english, japanese).e == nullptr);
   japanese.emplace(correct.path, Ref{&correct});
