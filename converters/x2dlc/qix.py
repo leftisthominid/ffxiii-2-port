@@ -540,6 +540,34 @@ def fix_generate_indices(pc, x):
     return bytes(out), len(indices)
 
 
+def fix_particle_references(pc, x):
+    """Particle emitter parameters carry pairs of signed 16-bit resource IDs.
+
+    Native 829D6078 reads the emitter's +180 payload and passes its +40,
+    +44, +76 and +84 pairs to 828F0CD0. The 96-byte payload signature is
+    shared by other classes, where +84 can be a float. Require the owning
+    240-byte emitter class and its typed payload range, not just payload size.
+    """
+    L = layout(pc)
+    if L is None or len(pc) != len(x): return x, 0
+    emitter = (240, ((180, 0), (188, 0), (160, 0), (168, 0)))
+    payload = (96, ((24, 0),))
+    ranges = [(at, at + num * 96) for sig, at, num in L['inst'] if sig == payload]
+    out, indices = bytearray(x), set()
+    for sig, at, num in L['inst']:
+        if sig != emitter: continue
+        for i in range(num):
+            target, count = struct.unpack_from('<II', pc, at + 240 * i + 180)
+            target += R
+            if not count or not any(lo <= target and (target-lo) % 96 == 0 and target + count * 96 <= hi for lo, hi in ranges): continue
+            for j in range(count):
+                for field in (40, 44, 76, 84):
+                    word = target + 96 * j + field
+                    _swap(out, pc, word, 'hh')
+                    indices.update((word, word + 2))
+    return bytes(out), len(indices)
+
+
 def fix_curves(pc, x):
     """Effect curve records: {u8 mode, u8 components, u16 zero, floats[]}.
 

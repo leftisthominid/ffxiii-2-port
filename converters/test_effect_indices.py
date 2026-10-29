@@ -5,6 +5,26 @@ from unittest.mock import patch
 from x2dlc import qix
 
 class EffectIndices(unittest.TestCase):
+    def test_particle_references_require_owning_emitter_class(self):
+        pc=bytearray(512)
+        struct.pack_into('<II',pc,80+180,352-48,1)
+        for off in (40,44,76,84): struct.pack_into('<hh',pc,352+off,1,-1)
+        payload=((96,((24,0),)),352,1)
+        emitter=((240,((180,0),(188,0),(160,0),(168,0))),80,1)
+        for owner in ([],[emitter]):
+            with patch.object(qix,'layout',return_value={'inst':owner+[payload]}):
+                result,count=qix.fix_particle_references(bytes(pc),bytes(pc))
+            self.assertEqual(count,8 if owner else 0)
+            if owner:
+                for off in (40,44,76,84):self.assertEqual(struct.unpack_from('>hh',result,352+off),(1,-1))
+            else:self.assertEqual(result,bytes(pc))
+
+    def test_particle_references_reject_payload_overrun(self):
+        pc=bytearray(512);struct.pack_into('<II',pc,80+180,352-48,2)
+        inst=[((240,((180,0),(188,0),(160,0),(168,0))),80,1),((96,((24,0),)),352,1)]
+        with patch.object(qix,'layout',return_value={'inst':inst}):
+            self.assertEqual(qix.fix_particle_references(bytes(pc),bytes(pc)),(bytes(pc),0))
+
     def test_adjacent_leaf_reference_lists_do_not_exchange_ids(self):
         for size,fields in [(80,((32,2),(40,3),(0,0),(8,0),(16,0),(24,0),(68,0))),
                             (84,((32,2),(40,3),(0,0),(8,0),(16,0),(24,0),(76,3),(68,0)))]:

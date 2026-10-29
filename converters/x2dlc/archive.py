@@ -154,7 +154,8 @@ def read_list(path_or_bytes):
 def read_files(filelist, white):
     """-> header32, [(code, ftype, path, data)] in list order"""
     hdr, ents = read_list(filelist)
-    arc = open(white, 'rb').read()
+    with open(white, 'rb') as stream:
+        arc = stream.read()
     out = []
     for code, ftype, pos, un, cm, path in ents:
         d = arc[pos * 2048:pos * 2048 + cm]

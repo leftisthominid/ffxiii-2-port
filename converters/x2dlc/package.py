@@ -45,6 +45,10 @@ def write(out_dir, ident, kind, hdr, files):
             ents.append((code, ftype, pos // 2048, un, len(z), path))
             pos += len(z) + pad
     with open(os.path.join(out_dir, f'filelist_p{ident}{kind}_u.x360.bin'), 'wb') as f:
+        # The native reader searches by (type, code), not pathname or archive
+        # position. The Steam inventory is in pathname order. Keep the streamed
+        # archive intact and sort only its index, retaining every sector offset.
+        ents.sort(key=lambda e: (e[1], e[0]))
         f.write(archive.encrypt(archive.build_plain(hdr, ents)))
     with open(os.path.join(out_dir, 'identifier'), 'wb') as f:
         f.write(ident.encode('ascii') + b'\0\0')
