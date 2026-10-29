@@ -112,6 +112,8 @@ inline const char* Start() {
 #include <unordered_set>
 #include <vector>
 
+#include "x2_voice_policy.h"
+
 int X2RecentFrameTimesMs(float* out, int max);                          // x2_hooks.cpp
 void X2ResolutionStartup(const std::filesystem::path& settings_dir);   // x2_hooks.cpp
 void X2FrameRateStartup();                                             // x2_settings.cpp
@@ -120,7 +122,9 @@ void X2FrameRateAfterSetup();                                          // x2_set
 // x2_settings.cpp
 void X2UiStyleForController(int ps3, const char* name);
 void X2SetVoiceAtStart(int jp, const std::string& note);
-void X2SetUpdateKind(int kind);  // 0 nothing, 1 the Japanese voices alone, 2 the title update (+ voices)
+void X2SetDlcVoiceAtStart(bool japanese);
+bool X2DlcVoiceAtStart();
+void X2SetUpdateKind(int kind);  // 0 no known title update, 2 the title update (+ optional voices)
 int X2UpdateKind();
 void X2SetJpDlcMounted();
 std::filesystem::path X2InstallDir();  // x2_settings.cpp: next to the exe (Android: X2_INSTALL_DIR)
@@ -612,8 +616,7 @@ class Ffxiii2App : public rex::ReXApp {
     // there; the game switches its downloadable content on when they load (sub_8225FC40). Choices:
     //   update_tu\      the 360 title update, unpacked by X2_Import_360_Content.ps1 -TuOut
     //   update_merged\  the title update with the Japanese voices added (x2_jpvoice --merge-update)
-    //   jpvoice\        the Japanese voices alone: only when no title update was unpacked (the
-    //                   title update's code then runs without its data; not expected)
+    // A voice-only archive cannot replace the title update required by this executable.
     {
       const std::filesystem::path exe = X2InstallDir();
       const std::filesystem::path jp = exe / "jpvoice", tu = exe / "update_tu", merged = exe / "update_merged";
@@ -626,16 +629,13 @@ class Ffxiii2App : public rex::ReXApp {
       const bool have_tu = std::filesystem::exists(tu / "x2_title_update.txt", ec2);
       const bool have_merged = have_tu && std::filesystem::exists(merged / "x2_merged.txt", ec2);
       const bool given = !paths.update_data_root.empty();
+      const auto policy = X2SelectVoicePolicy(v == "jp", have_tu, installed, have_merged, given);
+      X2SetDlcVoiceAtStart(policy.request_japanese_dlc);
       bool on = false;
       std::string note;
       if (given) {
         note = "English (an update folder was given)";
-      } else if (v == "jp" && installed && !have_tu) {
-        paths.update_data_root = jp;
-        X2SetUpdateKind(1);
-        on = true;
-        note = "Japanese (" + jp.string() + ")";
-      } else if (v == "jp" && installed && have_merged) {
+      } else if (policy.use_merged_update) {
         paths.update_data_root = merged;
         X2SetUpdateKind(2);
         on = true;
@@ -649,7 +649,7 @@ class Ffxiii2App : public rex::ReXApp {
         note = std::string("English (") + (!installed ? "the Japanese voices are not installed" : "Settings > Port Settings > Voice Language") + ")";
       }
       if (have_tu) REXLOG_INFO("XIII-2 title update: {}", tu.string());
-      else note += "; NO TITLE UPDATE in " + tu.string() + " (this build is made for it)";
+      else if (!given) note += "; NO TITLE UPDATE in " + tu.string() + " (this build is made for it)";
       X2SetVoiceAtStart(on ? 1 : 0, note);
     }
   }
@@ -670,7 +670,7 @@ class Ffxiii2App : public rex::ReXApp {
             vfs->RegisterSymbolicLink("X2JPDLC:", "\\Device\\X2JpDlc")) {
           X2SetJpDlcMounted();
           REXLOG_INFO("XIII-2 voices: DLC voices in Japanese from {} ({})", dir.string(),
-                      X2VoiceAtStart() ? "used" : "not used: the voices are English");
+                      X2DlcVoiceAtStart() ? "selected independently of base voices" : "not used: English selected");
         }
       }
     }
