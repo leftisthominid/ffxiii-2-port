@@ -20,7 +20,7 @@ function Build-X2Converter($t, [string]$source, [string]$exe) {
 # in <out>\NNNNNNN\ (the port opens those copies while the voices are Japanese). Once per package
 # and converter version.
 # 2: the lines too large at 24 kHz go down to 16, 11, or 8 kHz; the DLC scenes' Japanese lip-sync.
-$script:X2JpDlcVersion = '2'
+$script:X2JpDlcVersion = '3'
 function Convert-X2JpDlcVoices($t, [string]$steam, [string]$ffmpeg, [string]$dlcRoot, [string]$out, [string]$work, [string]$logs) {
   if (-not (Test-Path -LiteralPath $dlcRoot)) { Say '  no DLC packages installed'; return }
   $exe = Join-Path $work 'x2_jpvoice.exe'
@@ -43,7 +43,37 @@ function Convert-X2JpDlcVoices($t, [string]$steam, [string]$ffmpeg, [string]$dlc
     $log = Join-Path $logs "jpvoice_dlc_$id.log"
     # (--cache: each line's encode kept by its input; a package converted again re-encodes only
     # the lines that changed)
-    $rc = Invoke-Logged $exe @('--ffmpeg', $ffmpeg, '--cache', (Join-Path $work 'jpvoice_cache'), '--dlc', $steam, $pkg.FullName, $out) $log
+    # Deactivate the previous copy before rebuilding. A failed or interrupted
+    # conversion must fall back to the installed package, never stale DLC.
+    $active = Join-Path $out $id
+    if (Test-Path -LiteralPath $active) {
+      $disabled = Join-Path $work ('jpvoice_dlc_disabled\' + $id + '_' + [guid]::NewGuid().ToString('N'))
+      New-Item -ItemType Directory -Force -Path (Split-Path $disabled) | Out-Null
+      Move-Item -LiteralPath $active -Destination $disabled
+    }
+    Remove-Item -LiteralPath $stamp -Force -ErrorAction SilentlyContinue
+    $staging = Join-Path $work ('jpvoice_dlc_staging_' + [guid]::NewGuid().ToString('N'))
+    New-Item -ItemType Directory -Path $staging | Out-Null
+    try {
+      $rc = Invoke-Logged $exe @('--ffmpeg', $ffmpeg, '--cache', (Join-Path $work 'jpvoice_cache'), '--dlc', $steam, $pkg.FullName, $staging) $log
+      if ($rc -eq 0 -or $rc -eq 2) {
+        $ready = Join-Path $staging $id
+        if (Test-Path -LiteralPath $ready) {
+          $readyLists = @(Get-ChildItem -LiteralPath $ready -File -Filter 'filelist_p*_u.x360.bin')
+          if (-not $readyLists.Count) { throw "Japanese DLC file lists missing: $ready" }
+          foreach ($list in $readyLists) {
+            $archive = Join-Path $ready ($list.Name -replace '^filelist_', 'white_')
+            if (-not (Test-Path -LiteralPath $archive)) { throw "Japanese DLC archive missing: $archive" }
+          }
+          Move-Item -LiteralPath $ready -Destination $active
+        }
+        foreach ($csv in Get-ChildItem -LiteralPath $staging -File -Filter '*.csv') {
+          Move-Item -LiteralPath $csv.FullName -Destination (Join-Path $out $csv.Name) -Force
+        }
+      }
+    } finally {
+      Remove-Item -LiteralPath $staging -Recurse -Force -ErrorAction SilentlyContinue
+    }
     Get-Content -LiteralPath $log -ErrorAction SilentlyContinue | Where-Object { $_ -match ': .*(voice|lip-sync)|kept English:|error' } | Select-Object -First 10 | ForEach-Object { Say "    $_" }
     if ($rc -ne 0 -and $rc -ne 2) { Say "  DLC $id`: the conversion failed; its voices stay English (see $log)" 'Yellow'; continue }
     Set-Content -LiteralPath $stamp -Value $sig
