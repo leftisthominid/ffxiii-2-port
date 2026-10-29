@@ -560,7 +560,7 @@ class Ffxiii2App : public rex::ReXApp {
   void OnPreSetup(rex::RuntimeConfig& config) override {
     config.audio_factory = REX_AUDIO_BACKEND(X2AudioSystem);
     // XIII-2_Test.ps1 looks for this line: without it the game that ran is an older build.
-    REXLOG_INFO("XIII-2 build: test v38 (title update 0.0.1.13)");
+    REXLOG_INFO("XIII-2 build: test v39 (title update 0.0.1.13)");
     // Render resolution (resolution.txt in the settings folder): read by the renderer plugin
     // when it is loaded, right after this.
     X2ResolutionStartup(user_data_root());

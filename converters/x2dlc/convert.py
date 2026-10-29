@@ -356,9 +356,9 @@ class Converter:
                 r = texture.convert_txb(bytes(hdr), pc_imgb, g)
                 tex.append((len(out), r, e))
                 out.append([name, ext, None]); continue
-            if e == b'vmdl':
+            if e in (b'vmdl', b'vanm'):
                 part = vmdl.object_part(data)
-                y = self.learned_member('vmdl', part, path)
+                y = self.learned_member(e.decode(), part, path)
                 y = vmdl.preserve_geometry(data, y + data[len(part):])
                 try:
                     out.append([name, ext, vmdl.convert(data, y, self.shaders, self.ctx)])
