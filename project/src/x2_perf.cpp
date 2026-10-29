@@ -451,6 +451,27 @@ void log_guest_regs(const char* tag, const PPCContext* c) {
       }
     }
     REXLOG_ERROR("{}: guest lr {:08X} r1 {:08X};{}", tag, uint32_t(c->lr), c->r1.u32, regs);
+    if (base && uint32_t(c->lr) == 0x829E9068u) {
+      // The Valhalla failure dereferences an effect resource selected by the
+      // pair at r27+4. Preserve the actual record and owning objects, rather
+      // than guessing their schema from unrelated eight-byte file records.
+      // ReadProcessMemory also handles a damaged pointer without another fault.
+      struct Range { const char* name; uint32_t address; size_t size; };
+      const Range ranges[] = {{"record-r27", c->r27.u32, 64}, {"references-r4", c->r4.u32, 16},
+                              {"lookup-object-r3", c->r3.u32, 256}, {"group-r25", c->r25.u32, 128},
+                              {"owner-r31", c->r31.u32, 256}};
+      for (const auto& range : ranges) {
+        if (range.address < 0x10000 || uint64_t(range.address) + range.size > 0x100000000ull) continue;
+        uint8_t bytes[256] = {};
+        SIZE_T count = 0;
+        const bool complete = ReadProcessMemory(GetCurrentProcess(), base + range.address,
+                                                 bytes, range.size, &count) != 0;
+        std::string hex;
+        for (SIZE_T i = 0; i < count && i < sizeof(bytes); ++i) hex += fmt::format("{:02X}", bytes[i]);
+        REXLOG_ERROR("{}: effect lookup {} at {:08X}, {}/{} bytes{}: {}", tag, range.name, range.address,
+                     count, range.size, complete ? "" : " (unreadable/partial)", hex);
+      }
+    }
     if (!texts.empty()) REXLOG_ERROR("{}: registers pointing to text:{}", tag, texts);
     REXLOG_ERROR("{}: guest calls (return addresses):{}", tag, guest_stack(base, c->r1.u32));
   } else {
