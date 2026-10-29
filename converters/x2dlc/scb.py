@@ -74,6 +74,26 @@ def records(d, i, sz, E='<'):
         out.append((j, n)); j += n
     return out
 
+def track_records(d, i, size, E='<'):
+    """CTRK: u32 count, then {s16 parent, u8 type, u8 flags, extras}.
+
+    Native 82B246E0 uses flags & 31 to size each entry and reads parent with
+    lhz. Swapping the whole header word moves a small parent ID into flags.
+    """
+    end = i + size
+    if size < 20 or end > len(d): return None
+    count = struct.unpack_from(E + 'I', d, i + 16)[0]
+    if count > (size - 20) // 4: return None
+    out, at = [], i + 20
+    for _ in range(count):
+        if at + 4 > end: return None
+        length = (7 + 2 * (d[at + 3] & 31)) & ~3
+        if at + length > end: return None
+        out.append((at, length)); at += length
+    if end - at >= 16: return None
+    return out
+
+
 # the block header (after the chunk header) and the record header, by rule (all 2628 records
 # and 142 blocks of the base-game samples): byte offsets -> order
 BLOCK_HEAD = {0x24: 'W'}                    # 0x10 name (20 bytes), 0x24 u32, 0x28 u16
@@ -163,6 +183,15 @@ def _block_words(d, hdrs):
             # class 160, 64 bytes: the last three words are bytes (all 441 in the pairs)
             if n == 64 and d[j + 10] == 160:
                 for o in (52, 56, 60): out[j + o] = ('B', 'k')
+    # Track hierarchy entries have two byte fields after their signed parent
+    # index. Their flag byte controls the native reader's variable stride.
+    for i, tag in hdrs:
+        if tag != 'CTRK': continue
+        size = struct.unpack_from('<H', d, i + 6)[0] * 16
+        rows = track_records(d, i, size)
+        if rows is None: continue
+        out[i + 16] = ('B', 'W')
+        for at, length in rows: out[at] = ('B', 'h.')
     # @CRES resource id table: 'RIDI', u16, u16, u32 size, u16 count, then count u32 type codes
     # ('mtb\0', 'sscf'; text-like, so by rule)
     for i, tag in hdrs:

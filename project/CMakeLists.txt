@@ -15,6 +15,7 @@ set(FFXIII2_SOURCES
     src/main.cpp
     src/x2_hooks.cpp
     src/x2_movies.cpp
+    src/x2_story_recaps.cpp
     src/x2_settings.cpp
     src/x2_config_menu.cpp
     src/x2_perf.cpp

@@ -37,18 +37,6 @@
 std::filesystem::path X2InstallDir();  // x2_settings.cpp: next to the exe (Android: X2_INSTALL_DIR)
 int X2ConfigGetSkipStoryRecaps();
 
-// The load script asks this selector for the recap chapter. Its existing
-// no-recap case returns the supplied base value unchanged (82509110, mode 4).
-// Use that case before the script loads its recap scene/UI, rather than only
-// declining BinkOpen after the presentation has already been created.
-REX_EXTERN(__imp__sub_82509110);
-REX_HOOK_RAW(sub_82509110) {
-  if (X2ConfigGetSkipStoryRecaps()) {
-    REXLOG_INFO("XIII-2 Story Recaps: disabled at the load-script selector");
-    return;
-  }
-  __imp__sub_82509110(ctx, base);
-}
 
 namespace {
 uint32_t lr_load_be32(uint8_t* base, uint32_t address) {
