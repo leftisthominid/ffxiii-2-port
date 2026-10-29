@@ -19,7 +19,7 @@ def blocks(d, big_endian=False):
         t = R + struct.unpack_from(E + 'I', d, at)[0]
         if t + 0x20 > len(d): continue
         size = struct.unpack_from('>I', d, t + 16)[0]
-        if size == 0 or t + 0x20 + size > len(d) or any(d[t + 0x18:t + 0x20]): continue
+        if size == 0 or t + 0x20 + size > len(d): continue
         if hashlib.md5(d[t + 0x20:t + 0x20 + size]).digest() != d[t:t + 16]: continue
         out.append((at, t, size))
     out.sort(key=lambda b: b[1])
@@ -80,7 +80,7 @@ def convert(pc, y, lib, ctx=None):
 def preserve_geometry(pc, converted):
     """Keep endian-marked embedded geometry for the game's own loader.
 
-    VFXM and its VINS stream are independent binary formats, not Qix scalar
+    VFXM, VFXA and VINS streams are independent binary formats, not Qix scalar
     arrays. Their first byte tells the native reader to swap the Steam data.
     Guessing u16 pairs here turned a stream count of 1 into 65536.
     """
@@ -92,7 +92,7 @@ def preserve_geometry(pc, converted):
         offset, size = struct.unpack_from('<II', pc, at)
         start = R + offset
         if size < 16 or start + size > len(pc): continue
-        if pc[start:start + 4] != b'\1\0\0\0' or pc[start + 4:start + 8] not in (b'mxfv', b'sniv'): continue
+        if pc[start:start + 4] != b'\1\0\0\0' or pc[start + 4:start + 8] not in (b'mxfv', b'axfv', b'sniv'): continue
         out[start:start + size] = pc[start:start + size]
     return bytes(out)
 
