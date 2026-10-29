@@ -56,8 +56,7 @@
 // Backend (x2_settings.cpp, x2_hooks.cpp).
 int X2ConfigGetVoice();
 void X2ConfigSetVoice(int jp);
-int X2ConfigVoiceAvailable();
-int X2VoiceAtStart();
+bool X2DlcVoiceAtStart();
 int X2ConfigGetText();
 void X2ConfigSetText(int jp);
 int X2TextAtStart();
@@ -156,7 +155,7 @@ constexpr X2Text kTexts[] = {
     {"$x2_en", "English"},
     {"$x2_jp", "Japanese"},
     {"$x2_voice", "Voice Language"},
-    {"$x2_voiceh", "Choose the language of the spoken dialogue. A new choice asks to restart the game."},
+    {"$x2_voiceh", "Choose the spoken dialogue language. Missing voice replacements use the installed dialogue. Restart to apply."},
     {"$x2_voiceu", "The Japanese voices are not installed (the builder converts them from the Steam version)."},
     {"$x2_voice_0h", "Characters speak in English."},
     {"$x2_voice_1h", "Characters speak in Japanese, with the Japanese lip-sync."},
@@ -281,7 +280,9 @@ const char* x2_text(const char* key) {
   return x2_dynamic_text(key);
 }
 
-bool x2_item_selectable(uint32_t id) { return id != kIdVoice || X2ConfigVoiceAvailable() != 0; }
+// Voice Language is a preference, including when only DLC voices are available.
+// Unavailable replacements fall back to the installed dialogue.
+bool x2_item_selectable(uint32_t) { return true; }
 
 int x2_item_value(uint32_t id) {
   switch (id) {
@@ -728,7 +729,7 @@ REX_HOOK_RAW(sub_825BE8A8) {
     case kIdVoice:
       if ((value ? 1 : 0) != X2ConfigGetVoice()) {
         X2ConfigSetVoice(value ? 1 : 0);
-        if ((value ? 1 : 0) != X2VoiceAtStart()) g_restart_what.fetch_or(1);
+        if ((value != 0) != X2DlcVoiceAtStart()) g_restart_what.fetch_or(1);
         else g_restart_what.fetch_and(~1);
         g_restart_ask.store(g_restart_what.load() != 0);
       }

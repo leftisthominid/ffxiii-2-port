@@ -172,14 +172,6 @@ void X2ConfigSetSkipStoryRecaps(int skip) {
 }
 
 int X2ConfigGetVoice() { return (load(), g_voice_jp.load()); }
-// The converted Japanese voices are installed (jpvoice\ next to the game, made by the builder).
-int X2ConfigVoiceAvailable() {
-  static const int available = [] {
-    std::error_code ec;
-    return std::filesystem::exists(X2InstallDir() / "jpvoice" / "filelist_patch_u.x360.bin", ec) ? 1 : 0;
-  }();
-  return available;
-}
 void X2ConfigSetVoice(int jp) {
   g_voice_jp.store(jp ? 1 : 0);
   X2WriteSetting("voice.txt", jp ? "jp" : "en");
@@ -199,7 +191,10 @@ std::atomic<int> g_update_kind{0};
 void X2SetUpdateKind(int kind) { g_update_kind.store(kind); }
 namespace {
 std::atomic<bool> g_jp_dlc{false};
+std::atomic<bool> g_dlc_voice_jp_at_start{false};
 }
+void X2SetDlcVoiceAtStart(bool japanese) { g_dlc_voice_jp_at_start.store(japanese); }
+bool X2DlcVoiceAtStart() { return g_dlc_voice_jp_at_start.load(); }
 void X2SetJpDlcMounted() { g_jp_dlc.store(true); }
 bool X2JpDlcMounted() { return g_jp_dlc.load(); }
 int X2UpdateKind() { return g_update_kind.load(); }

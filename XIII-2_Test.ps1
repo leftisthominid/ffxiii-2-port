@@ -512,14 +512,7 @@ if (Test-Path -LiteralPath $saveRoot) {
     Say ("    Save Data {0:D2}  {1,-38} {2}" -f $n, $from, $(if ($h) { $h.Text } else { '(unreadable)' }))
   }
 }
-$voiceFile = Join-Path $Out 'userdata\voice.txt'
-if ((Test-Path -LiteralPath (Join-Path $run 'jpvoice\filelist_patch_u.x360.bin.with_lipsync')) -and
-    (Test-Path -LiteralPath $voiceFile) -and (Get-Content -LiteralPath $voiceFile -TotalCount 1) -eq 'en' -and
-    -not (Test-Path -LiteralPath (Join-Path $Out 'userdata\voice_reset_v10.txt'))) {
-  Set-Content -LiteralPath $voiceFile -Value 'jp'
-  Set-Content -LiteralPath (Join-Path $Out 'userdata\voice_reset_v10.txt') -Value 'done'
-  Say '  Voice Language set back to Japanese (once; Settings > Port Settings changes it)'
-}
+# Preserve the selected voice language during installation and cache rebuilds.
 
 # Without -VoiceTest, a patch narrowed by an earlier test gets all its voice files back.
 $voiceRestore = -not $VoiceTest -and (Test-Path -LiteralPath (Join-Path $run 'jpvoice\filelist_patch_u.x360.bin.voices'))

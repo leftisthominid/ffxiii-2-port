@@ -185,12 +185,12 @@ REX_HOOK_RAW(sub_82B61F40) {
 // reached as X2JPDLC:\ (ffxiii2_app.h). When the game opens a package's file list or archive
 // ("NNNNNNN:\filelist_pNNNNNNN..." / "white_p...") while the voices are Japanese, the copy is opened
 // instead.
-int X2VoiceAtStart();
+bool X2DlcVoiceAtStart();
 bool X2JpDlcMounted();
 std::filesystem::path X2InstallDir();  // x2_settings.cpp
 namespace {
 std::string x2_jp_dlc_path(const std::string& path) {
-  if (path.size() < 20 || path[7] != ':' || path[8] != '\\' || !X2JpDlcMounted() || !X2VoiceAtStart()) return {};
+  if (path.size() < 20 || path[7] != ':' || path[8] != '\\' || !X2JpDlcMounted() || !X2DlcVoiceAtStart()) return {};
   for (int i = 0; i < 7; ++i)
     if (!std::isdigit(static_cast<unsigned char>(path[i]))) return {};
   const std::string name = path.substr(9);
