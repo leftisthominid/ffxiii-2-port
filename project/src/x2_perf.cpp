@@ -438,6 +438,17 @@ void log_guest_regs(const char* tag, const PPCContext* c) {
       regs += fmt::format(" r{}={:08X}", r, rs[r]->u32);
       const std::string s = guest_text(base, rs[r]->u32);
       if (!s.empty()) texts += fmt::format(" r{}='{}'", r, s);
+      if (s == "SEDBmtb") {
+        // Preserve the live byte order and section table. The source motion
+        // can be valid while an in-place runtime conversion is incomplete.
+        uint8_t header[256] = {};
+        SIZE_T count = 0;
+        if (ReadProcessMemory(GetCurrentProcess(), base + rs[r]->u32, header, sizeof(header), &count)) {
+          std::string hex;
+          for (SIZE_T i = 0; i < count; ++i) hex += fmt::format("{:02X}", header[i]);
+          REXLOG_ERROR("{}: live motion header r{} at {:08X}: {}", tag, r, rs[r]->u32, hex);
+        }
+      }
     }
     REXLOG_ERROR("{}: guest lr {:08X} r1 {:08X};{}", tag, uint32_t(c->lr), c->r1.u32, regs);
     if (!texts.empty()) REXLOG_ERROR("{}: registers pointing to text:{}", tag, texts);

@@ -113,3 +113,25 @@ function Add-X2SlotStateTrace([string]$generated) {
   if ($found -ne 1) { throw "Expected one slot update function, found $found." }
   return "slot/tutorial $state"
 }
+
+# Registration occurs after the patched XEX image is mapped, before DllMain.
+# Clear only PE uninitialized data; initialized data and code stay intact.
+function Update-X2ModuleBss([string]$generated, [string]$header) {
+  $file = Join-Path $generated 'ffxiii2_register.cpp'
+  $text = [IO.File]::ReadAllText($file)
+  $marker = '// XIII2_MODULE_BSS v1'
+  if ($text.Contains($marker)) { return 'module zero-initialization already patched' }
+  if (-not (Test-Path -LiteralPath $header)) { throw "Module BSS helper missing: $header" }
+  $start = 'void ReXModule_Register(rex::runtime::IModuleRegistrar* registrar) {'
+  if ([regex]::Matches($text,[regex]::Escape($start)).Count -ne 1) { throw "Unexpected module registration shape: $file" }
+  $body = @'
+  // XIII2_MODULE_BSS v1
+  const size_t x2_zeroed = X2ClearModuleBss(std::span<uint8_t>(
+      REX_KERNEL_STATE()->memory()->virtual_membase() + REX_IMAGE_BASE, REX_IMAGE_SIZE));
+  REXLOG_INFO("XIII-2 zone memory: zeroed {} bytes of uninitialized data at {:08X}", x2_zeroed, REX_IMAGE_BASE);
+'@
+  $text = $text.Replace($start, $start + "`n" + $body)
+  $includes = '#include "' + $header.Replace('\','/') + '"' + "`n" + '#include <rex/system/kernel_state.h>' + "`n" + '#include <rex/logging/macros.h>' + "`n"
+  [IO.File]::WriteAllText($file,$includes+$text)
+  return 'module zero-initialization patched'
+}

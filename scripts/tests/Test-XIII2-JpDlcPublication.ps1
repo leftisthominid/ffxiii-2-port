@@ -2,7 +2,7 @@ param([string]$ScratchRoot = [IO.Path]::GetTempPath())
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot '../../builder/x2_jpvoice.ps1')
 function Say { param($message,$color) }
-function Build-X2Converter { }
+function Build-X2Converter { if ($script:mode -eq 'compile-failed') { throw 'Simulated compiler failure' } }
 $root = Join-Path $ScratchRoot ('jp-publication-test-' + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $root | Out-Null
 $script:mode = ''
@@ -19,7 +19,7 @@ function Invoke-Logged {
   return 0
 }
 try {
-  foreach ($mode in @('failed','exception','empty-index','success')) {
+  foreach ($mode in @('compile-failed','failed','exception','empty-index','success')) {
     $script:mode = $mode
     $case = Join-Path $root $mode
     $packages = Join-Path $case 'packages'
@@ -35,7 +35,7 @@ try {
     }
     $threw = $false
     try { Convert-X2JpDlcVoices @{} 'steam' 'ffmpeg' $packages $out $work $logs } catch { $threw = $true }
-    $shouldThrow = $mode -in @('exception','empty-index')
+    $shouldThrow = $mode -in @('compile-failed','exception','empty-index')
     if ($threw -ne $shouldThrow) { throw "Unexpected exception result: $mode" }
     if ($mode -eq 'success') {
       if ([IO.File]::ReadAllText((Join-Path $active 'filelist_p0000071img_u.x360.bin')) -ne 'new index') { throw 'New index missing' }
