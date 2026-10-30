@@ -155,3 +155,15 @@ function Read-Ps3Sfo($ps3) {
   Remove-Item -LiteralPath $tmp -Force
   return [Text.Encoding]::UTF8.GetString($b)
 }
+
+function Get-X2Ps3Location([string]$source,[string]$relative) {
+  if (Test-Path -LiteralPath $source -PathType Container) {
+    $file=Get-Item -LiteralPath (Join-Path $source $relative) -ErrorAction Stop
+    return @(0,[long]$file.Length)
+  }
+  return [LrIso]::Locate($source,$relative)
+}
+function Copy-X2Ps3File([string]$source,[string]$relative,[string]$dest) {
+  if (Test-Path -LiteralPath $source -PathType Container) { Copy-Item -LiteralPath (Join-Path $source $relative) -Destination $dest -Force }
+  else { [LrIso]::Extract($source,$relative,$dest) }
+}

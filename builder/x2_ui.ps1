@@ -43,7 +43,7 @@ function Convert-X2Ps3Ui($t, [string]$iso, [string]$game, [string]$textures, [st
     Say "  no font textures rebuilt (see $(Join-Path $logs 'fonts.log')); the game's own fonts stay" 'Yellow'
   }
   # PS3 UI: white_imgu.ps3.bin copied out of the disc image (2 GB, removed afterwards).
-  $at = [LrIso]::Locate($iso, $script:X2Ps3UiPack)
+  $at = Get-X2Ps3Location $iso $script:X2Ps3UiPack
   if ($at[1] -ne $script:X2Ps3UiPackSize) {
     throw ("white_imgu.ps3.bin on this PS3 disc is {0:N0} bytes, not the {1:N0} of the USA disc (BLUS30776)." -f $at[1], $script:X2Ps3UiPackSize)
   }
@@ -52,7 +52,7 @@ function Convert-X2Ps3Ui($t, [string]$iso, [string]$game, [string]$textures, [st
   New-Item -ItemType Directory -Force -Path $sysPs3 | Out-Null
   if (-not ((Test-Path -LiteralPath $copy) -and (Get-Item -LiteralPath $copy).Length -eq $at[1])) {
     Say '  copying white_imgu.ps3.bin out of the PS3 disc image (2 GB)...'
-    $job = Start-Job -ScriptBlock { param($i, $r, $d, $isoPs1) . $isoPs1; [LrIso]::Extract($i, $r, $d) } -ArgumentList $iso, $script:X2Ps3UiPack, $copy, (Join-Path $PSScriptRoot 'iso.ps1')
+    $job = Start-Job -ScriptBlock { param($i, $r, $d, $isoPs1) . $isoPs1; Copy-X2Ps3File $i $r $d } -ArgumentList $iso, $script:X2Ps3UiPack, $copy, (Join-Path $PSScriptRoot 'iso.ps1')
     try {
       Wait-WithProgress { [bool](Wait-Job $job -Timeout 15) } { '{0:N1} of {1:N1} GB' -f ((Get-Item -LiteralPath $copy -ErrorAction SilentlyContinue).Length / 1GB), ($at[1] / 1GB) }
       Receive-Job $job -ErrorAction Stop | Out-Null

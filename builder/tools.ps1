@@ -153,7 +153,8 @@ function Expand-ZipWithProgress([string]$zip, [string]$dest) {
 function Get-Pinned([string]$key, [string]$dir) {
   $d = $script:Downloads[$key]
   New-Item -ItemType Directory -Force -Path $dir | Out-Null
-  $file = Join-Path $dir ([IO.Path]::GetFileName($d.url))
+  $name = if ($d.filename) { $d.filename } else { [IO.Path]::GetFileName($d.url) }
+  $file = Join-Path $dir $name
   if ((Test-Path -LiteralPath $file) -and (Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash -eq $d.sha256) { return $file }
   Say ("  downloading {0} ({1:N0} MB)..." -f $d.name, ($d.size / 1MB))
   $tmp = "$file.part"

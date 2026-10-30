@@ -30,6 +30,11 @@ else()
     add_executable(ffxiii2 ${FFXIII2_SOURCES})
 endif()
 
+if(WIN32 AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/src/ffxiii2.rc")
+    enable_language(RC)
+    target_sources(ffxiii2 PRIVATE src/ffxiii2.rc)
+endif()
+
 rexglue_setup_target(ffxiii2)
 
 # As in the Lightning Returns port: the recompiled code is built for the CPU of the PC that

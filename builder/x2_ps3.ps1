@@ -44,8 +44,9 @@ function Convert-X2Ps3Movies([string]$iso, [string]$ffmpeg, [string]$outDir, [st
   New-Item -ItemType Directory -Force -Path $outDir, $work, $logs | Out-Null
   $todo = @($script:X2Ps3Movies | Where-Object { -not ((Test-Path -LiteralPath (Join-Path $outDir "$($_[0]).mp4")) -and (Get-Item -LiteralPath (Join-Path $outDir "$($_[0]).mp4")).Length -gt 0) })
   if (-not $todo.Count) { Say "  all $($script:X2Ps3Movies.Count) PS3 movies already in $outDir"; return }
-  $at = [LrIso]::Locate($iso, $script:X2Ps3MoviePack)
+  $at = Get-X2Ps3Location $iso $script:X2Ps3MoviePack
   $file = $iso; $offset = $at[0]
+  if (Test-Path -LiteralPath $iso -PathType Container) { $file = Join-Path $iso $script:X2Ps3MoviePack }
   if ($at[1] -ne $script:X2Ps3MoviePackSize) {
     throw ("movieu.ps3.bin on this PS3 disc is {0:N0} bytes, not the {1:N0} of the USA disc (BLUS30776), the only one supported so far." -f $at[1], $script:X2Ps3MoviePackSize)
   }
@@ -54,7 +55,7 @@ function Convert-X2Ps3Movies([string]$iso, [string]$ffmpeg, [string]$outDir, [st
     $copy = Join-Path $work 'movieu.ps3.bin'
     if (-not ((Test-Path -LiteralPath $copy) -and (Get-Item -LiteralPath $copy).Length -eq $at[1])) {
       Say '  copying movieu.ps3.bin out of the PS3 disc image (it is stored in pieces)...'
-      $job = Start-Job -ScriptBlock { param($i, $r, $d, $isoPs1) . $isoPs1; [LrIso]::Extract($i, $r, $d) } -ArgumentList $iso, $script:X2Ps3MoviePack, $copy, (Join-Path $PSScriptRoot 'iso.ps1')
+      $job = Start-Job -ScriptBlock { param($i, $r, $d, $isoPs1) . $isoPs1; Copy-X2Ps3File $i $r $d } -ArgumentList $iso, $script:X2Ps3MoviePack, $copy, (Join-Path $PSScriptRoot 'iso.ps1')
       try {
         Wait-WithProgress { [bool](Wait-Job $job -Timeout 15) } { '{0:N1} of {1:N1} GB' -f ((Get-Item -LiteralPath $copy -ErrorAction SilentlyContinue).Length / 1GB), ($at[1] / 1GB) }
         Receive-Job $job -ErrorAction Stop | Out-Null

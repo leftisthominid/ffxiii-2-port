@@ -60,7 +60,7 @@ function Invoke-X2Dlc([string]$py, [string[]]$arguments, [string]$log) {
   return $rc
 }
 
-function Invoke-X2SteamDlc([string]$mode, [string]$game, [string]$tuDir, [string]$steam, [string]$toolsDir, [string]$out, [string]$logs) {
+function Invoke-X2SteamDlc([string]$mode, [string]$game, [string]$tuDir, [string]$steam, [string]$toolsDir, [string]$out, [string]$logs, [switch]$NoReport) {
   $userdata = Join-Path $out 'userdata'
   $work = Join-Path $out 'work\steamdlc'
   $root = Join-Path $userdata '0000000000000000\53510806'
@@ -163,6 +163,7 @@ function Invoke-X2SteamDlc([string]$mode, [string]$game, [string]$tuDir, [string
     }
   }
   # the report
+  if ($NoReport) { return }
   $rep = Join-Path $work 'report'
   if (Test-Path -LiteralPath $rep) { Remove-Item -LiteralPath $rep -Recurse -Force }
   New-Item -ItemType Directory -Force -Path $rep | Out-Null
