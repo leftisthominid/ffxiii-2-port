@@ -1230,7 +1230,7 @@ struct PatchFile {
 };
 
 static void write_filelist(const fs::path& p, std::vector<PatchFile> files) {
-  std::sort(files.begin(), files.end(), [](const PatchFile& a, const PatchFile& b) {
+  std::stable_sort(files.begin(), files.end(), [](const PatchFile& a, const PatchFile& b) {
     return std::tie(a.ftype, a.code) < std::tie(b.ftype, b.code);
   });
   std::vector<Bytes> chunks(1);
@@ -1910,12 +1910,21 @@ static int merge_update(const fs::path& tu, const fs::path& voices, const fs::pa
       if (!list) continue;
       if (root == tu) title_data = true;
       const auto size = fs::file_size(root / archives[k]);
-      std::set<std::pair<uint8_t, uint32_t>> identities;
+      std::map<std::pair<uint8_t, uint32_t>, Entry> identities;
+      Archive input(root / archives[k]);
       for (const auto& entry : parse_filelist(read_file(root / lists[k]))) {
-        if (!identities.insert({entry.ftype, entry.code}).second)
-          throw std::runtime_error("duplicate update identity: " + entry.path);
         if (entry.sector > size / 2048 || entry.csize > size - entry.sector * 2048)
           throw std::runtime_error("update entry outside archive: " + entry.path);
+        const auto prior = identities.emplace(std::make_pair(entry.ftype, entry.code), entry);
+        if (!prior.second) {
+          const Entry& first = prior.first->second;
+          // Real title updates repeat some identities at different sectors.
+          // Preserve every row and its relative order, but only accept repeated
+          // sources when their full decoded payloads and paths are identical.
+          if (root == voices || lower(first.path) != lower(entry.path) ||
+              first.usize != entry.usize || input.read(first) != input.read(entry))
+            throw std::runtime_error("conflicting update identity: " + entry.path);
+        }
         const auto path = lower(entry.path);
         const auto declared = declared_lips.find(uint64_t(entry.ftype) << 32 | entry.code);
         const bool lip_path = path.rfind("mot/", 0) == 0 || path.rfind("event/", 0) == 0 ||

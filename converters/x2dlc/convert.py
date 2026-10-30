@@ -260,6 +260,9 @@ class Converter:
             if ext in ('veff', 'vlea'):
                 y, curves = qix.fix_curves(pc, y)
                 if curves: self.note('effect curves (typed)', curves)
+            if ext == 'veff':
+                y, controls = qix.fix_inline_resource_controls(pc, y)
+                if controls: self.note('inline effect resource pairs (s16)', controls)
             if ext in ('vlea', 'vins', 'vinsbin'):
                 y, indices = qix.fix_leaf_indices(pc, y)
                 if indices: self.note('leaf object indices (u16)', indices)
