@@ -81,7 +81,7 @@ def cut_member_fix(e, pc, y):
         # Printable record bytes can be floats or packed fields, not names.
         for w in scb.text_words(pc) & mcb.resource_words(pc):
             y[w:w + 4] = pc[w:w + 4]
-        return mcb.structural(pc, y)
+        return mcb.preserve_embedded_mtb(pc, mcb.structural(pc, y))
     else:
         y[0xC] = 0
         i = 0

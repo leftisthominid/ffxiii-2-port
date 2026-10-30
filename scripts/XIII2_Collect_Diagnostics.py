@@ -108,10 +108,14 @@ def main(argv=None):
         # Current logs first; at most four, with a four-MiB tail per log.
         logs = sorted((root/'logs').glob('*.log'), key=lambda p:(not p.name.startswith('run'), -p.stat().st_mtime))
         for path in logs[:4]: file(path, 'logs/'+path.name, tail=True)
-        for path in logs[4:]: omissions.append(dict(path='logs/'+path.name, reason='current log count limit'))
-        # Include the merge failure log even when other build logs are newer.
-        if root/'logs'/'merge_update.log' not in logs[:4]:
-            file(root/'logs'/'merge_update.log', 'logs/merge_update.log', tail=True)
+        mandatory_logs = ('merge_update.log', 'steamdlc_build.log', 'build.log', 'configure.log')
+        for path in logs[4:]:
+            if path.name not in mandatory_logs:
+                omissions.append(dict(path='logs/'+path.name, reason='current log count limit'))
+        for name in mandatory_logs:
+            path = root/'logs'/name
+            if path not in logs[:4]: file(path, 'logs/'+name, tail=True)
+        file(root/'work/steamdlc/build_report.json', 'reports/build_report.json')
         for folder in ('update_tu', 'jpvoice', 'update_merged'):
             parent = root/'run'/folder
             for pattern in ('filelist_patch*.bin', 'x2_title_update.txt', 'x2_merged*.txt', 'version.txt', 'jp_lipsync.txt'):
