@@ -4,7 +4,8 @@ param(
     [string]$Content = 'C:\FFXIII-2\Content',
     [string]$Steam = 'C:\Program Files (x86)\Steam\steamapps\common\FINAL FANTASY XIII-2',
     [string]$LrRoot = 'C:\Lightning Returns',
-    [string]$SourceZip = ''
+    [string]$SourceZip = '',
+    [ValidateSet('en','jp')][string]$Voice = 'en'
 )
 $ErrorActionPreference = 'Stop'
 if (Get-Process -Name ffxiii2 -ErrorAction SilentlyContinue) { throw 'Close FFXIII-2 before restoring DLC.' }
@@ -48,7 +49,8 @@ $builder = Join-Path $source 'XIII-2_Test.ps1'
 $collector = Join-Path $source 'scripts\XIII2_Collect_Diagnostics.py'
 $backupRoot = Join-Path $Out ('save_backups\xbox-dlc-test-' + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $backupRoot | Out-Null
-$steps = @('Original Xbox 360 DLC baseline; English selected. Gameplay validation pending.')
+$voiceName = if ($Voice -eq 'jp') { 'Japanese' } else { 'English' }
+$steps = @("Original Xbox 360 DLC baseline; $voiceName selected. Gameplay validation pending.")
 if (Test-Path -LiteralPath $tracking) { Copy-Item -LiteralPath $tracking -Destination (Join-Path $backupRoot 'moved_360_packages.txt') }
 Write-Host "Reversible content backup: $backupRoot" -ForegroundColor Cyan
 try {
@@ -65,9 +67,9 @@ try {
     if (Test-Path -LiteralPath $movies) { Move-Item -LiteralPath $movies -Destination (Join-Path $backupRoot 'movies_steam') }
     $missing = Join-Path $userData 'x2_missing_movies.txt'
     if (Test-Path -LiteralPath $missing) { Move-Item -LiteralPath $missing -Destination $backupRoot }
-    $voice = Join-Path $userData 'voice.txt'
-    if (Test-Path -LiteralPath $voice) { Copy-Item -LiteralPath $voice -Destination (Join-Path $backupRoot 'voice.txt') }
-    [IO.File]::WriteAllText($voice, 'en', [Text.Encoding]::ASCII)
+    $voicePath = Join-Path $userData 'voice.txt'
+    if (Test-Path -LiteralPath $voicePath) { Copy-Item -LiteralPath $voicePath -Destination (Join-Path $backupRoot 'voice.txt') }
+    [IO.File]::WriteAllText($voicePath, $Voice, [Text.Encoding]::ASCII)
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $builder -Out $Out -LrRoot $LrRoot -Game $Game -Content $Content -Steam $Steam -SteamDlc restore -SkipLegacyLogZip
     if ($LASTEXITCODE -ne 0) { throw "Xbox DLC restore failed: exit $LASTEXITCODE" }
     foreach ($item in $restore) {
@@ -78,7 +80,7 @@ try {
     if (-not $originals.Count) { throw 'No original Xbox DLC packages found; game was not started.' }
     $steps += 'Original package folders: ' + (($originals | ForEach-Object {$_.Name}) -join ', ')
     Write-Host "Xbox DLC restored. Converted content retained in $backupRoot" -ForegroundColor Green
-    Write-Host 'Starting English test with original Xbox DLC. Keep the game closed during post-run collection.'
+    Write-Host "Starting $voiceName test with original Xbox DLC. Keep the game closed during post-run collection."
     # Direct builder invocation: no Steam-derived DLC installation.
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $builder -Out $Out -LrRoot $LrRoot -Game $Game -Content $Content -Steam $Steam -SkipLegacyLogZip
     if ($LASTEXITCODE -ne 0) { throw "Build/run reported exit $LASTEXITCODE" }
@@ -87,7 +89,7 @@ try {
     throw
 } finally {
     $steps | Set-Content -LiteralPath (Join-Path $session 'steps.txt') -Encoding ASCII
-    @{version=48;content_source='original-xbox360';requested_voice='en';windows_gameplay_validated=$false} | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $session 'source-version.json') -Encoding ASCII
+    @{version=48;content_source='original-xbox360';requested_voice=$Voice;windows_gameplay_validated=$false} | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $session 'source-version.json') -Encoding ASCII
     if (-not (Get-Process -Name ffxiii2 -ErrorAction SilentlyContinue)) {
         & $python -u $collector --game-output $Out --out $session --session $session
     } else { Write-Host "Game is still running; collect after closing it. Session folder: $session" }
