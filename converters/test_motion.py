@@ -24,6 +24,37 @@ def resource(name, length=48):
 
 
 class MotionTests(unittest.TestCase):
+    @staticmethod
+    def embedded_curve():
+        pc=bytearray(0x160)
+        pc[:8]=b'SEDBACB\0';pc[0x30:0x38]=b'@FCURVE\0'
+        pc[0x50:0x60]=b'FCurve_Test'.ljust(16,b'\0')
+        struct.pack_into('<I',pc,0x60,0xD0)
+        pc[0x70:0x78]=b'SEDBmtb\0';struct.pack_into('<H',pc,0x70+14,0x40)
+        struct.pack_into('<5I',pc,0x70+0x40,4,0x70,0x80,0x90,0xA0)
+        return bytes(pc)
+
+    def test_embedded_action_curve_keeps_all_mtb_bytes(self):
+        pc=self.embedded_curve();bad=bytes([0xAB])*len(pc)
+        out=convert.cut_member_fix(b'acb',pc,bad)
+        self.assertEqual(out[0x70:0x140],pc[0x70:0x140])
+        self.assertEqual(out[-32:],bad[-32:])
+        self.assertEqual(struct.unpack_from('<I',out,0x70+0x44)[0],0x70)
+
+    def test_embedded_curve_requires_name_length_and_section_bounds(self):
+        for where,value,fmt in [(0x60,0xFFFF,'I'),(0x70+14,0xFFFF,'H'),(0x70+0x44,0xFFFF,'I')]:
+            pc=bytearray(self.embedded_curve());struct.pack_into('<'+fmt,pc,where,value)
+            bad=bytes([0xAB])*len(pc)
+            self.assertEqual(mcb.preserve_embedded_mtb(bytes(pc),bad),bad)
+        pc=bytearray(self.embedded_curve());pc[0x50:0x60]=b'Other'.ljust(16,b'\0')
+        bad=bytes([0xAB])*len(pc)
+        self.assertEqual(mcb.preserve_embedded_mtb(bytes(pc),bad),bad)
+
+    def test_embedded_curve_never_rewrites_other_member_kinds(self):
+        pc=bytearray(self.embedded_curve());pc[:8]=b'SEDBSCB\0'
+        bad=bytes([0xAB])*len(pc)
+        self.assertEqual(mcb.preserve_embedded_mtb(bytes(pc),bad),bad)
+
     def test_steam_movie_is_reported_as_unsupported_not_absent(self):
         class Steam:
             files = {'movie_win/tm_tevb_050_us.bik': None}

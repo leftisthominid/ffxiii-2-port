@@ -179,3 +179,33 @@ def resource_words(pc):
         end = i + struct.unpack_from('<H', pc, i + 4)[0] * 8
         if i + 8 <= end <= len(pc): out.update(range(i + 8, end, 4))
     return out
+
+
+def preserve_embedded_mtb(pc, converted):
+    """FCurve records own little-endian MTB blobs normalized by the game.
+
+    Require the named, aligned record, its bounded length and valid section
+    offsets. Learned action-block word rules must not partially swap its MTB.
+    """
+    if len(pc) != len(converted) or pc[:8] not in (b'SEDBACB\0', b'SEDBMCB\0'):
+        return converted
+    out = bytearray(converted)
+    start = 0
+    while True:
+        at = pc.find(b'SEDBmtb\0', start)
+        if at < 0: break
+        start = at + 8
+        if at < R + 32 or at % 16 or at + 0x40 > len(pc): continue
+        if pc.rfind(b'@FCURVE\0', R, at - 32) < 0: continue
+        name = pc[at - 32:at - 16].split(b'\0', 1)[0]
+        if not re.fullmatch(rb'FCurve_[A-Za-z0-9_]+', name): continue
+        size = struct.unpack_from('<I', pc, at - 16)[0]
+        if size < 0x40 or at + size > len(pc): continue
+        table = struct.unpack_from('<H', pc, at + 14)[0]
+        if table < 0x30 or table + 4 > size: continue
+        count = struct.unpack_from('<I', pc, at + table)[0]
+        if count > 256 or table + 4 + count * 4 > size: continue
+        offsets = struct.unpack_from('<' + 'I' * count, pc, at + table + 4)
+        if any(offset + 4 > size for offset in offsets): continue
+        out[at:at + size] = pc[at:at + size]
+    return bytes(out)

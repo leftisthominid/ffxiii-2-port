@@ -27,10 +27,12 @@ class BoundedCollection(unittest.TestCase):
  def test_recovers_current_logs_and_indexes_without_assets(self):
   with tempfile.TemporaryDirectory() as tmp:
    root=Path(tmp);game=root/'game'
-   for name,data in {'logs/run.log':b'crash captured','logs/merge_update.log':b'duplicate identity','run/update_tu/filelist_patch_u.x360.bin':b'index','userdata/voice.txt':b'en','work/steamdlc/base_data.pkl':b'PRIVATE CACHE','logs/private-context.txt':b'PRIVATE','run/update_tu/white_patch_u.x360.bin':b'GAME ARCHIVE'}.items():
+   for name,data in {'logs/run.log':b'crash captured','logs/merge_update.log':b'duplicate identity','logs/steamdlc_build.log':b'shader build report','work/steamdlc/build_report.json':b'{}','run/update_tu/filelist_patch_u.x360.bin':b'index','userdata/voice.txt':b'en','work/steamdlc/base_data.pkl':b'PRIVATE CACHE','logs/private-context.txt':b'PRIVATE','run/update_tu/white_patch_u.x360.bin':b'GAME ARCHIVE'}.items():
     path=game/name;path.parent.mkdir(parents=True,exist_ok=True);path.write_bytes(data)
    files,status=self.run_collection(root)
    self.assertEqual(files['logs/run.log'],b'crash captured')
+   self.assertEqual(files['logs/steamdlc_build.log'],b'shader build report')
+   self.assertEqual(files['reports/build_report.json'],b'{}')
    self.assertEqual(files['update-indexes/update_tu/filelist_patch_u.x360.bin'],b'index')
    self.assertFalse(any(b'PRIVATE' in b or b'GAME ARCHIVE' in b for b in files.values()))
    self.assertLess(status['raw_bytes'],1024)
