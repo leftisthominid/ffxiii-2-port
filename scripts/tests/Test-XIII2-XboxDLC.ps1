@@ -19,7 +19,7 @@ function powershell.exe {
  $global:LASTEXITCODE=0
 }
 try {
- foreach($mode in @('success','missing-backup','game-running','restore-failure')){
+ foreach($mode in @('success','japanese','missing-backup','game-running','restore-failure')){
   $case=Join-Path $root $mode;$out=Join-Path $case 'out';$lr=Join-Path $case 'lr';$game=Join-Path $case 'game'
   $packages=Join-Path $out 'userdata/0000000000000000/53510806/00000002'
   $old=Join-Path $out 'save_backups/old';$name='A'*40;$native=Join-Path $packages $name;$backup=Join-Path $old $name
@@ -35,8 +35,8 @@ try {
   $env:USERPROFILE=$case
   $global:X2XboxFixture=@{mode=$mode;calls=0;out=$out;native=$native;backup=$backup;tracking=$tracking}
   $threw=$false
-  try{& (Join-Path $PSScriptRoot '../XIII2_Test_XboxDLC.ps1') -Out $out -Game $game -LrRoot $lr -Content (Join-Path $case 'content') -Steam (Join-Path $case 'steam') -SourceZip $SourceZip}catch{$threw=$true}
-  if($threw -ne ($mode -ne 'success')){throw "Unexpected failure result: $mode"}
+  try{& (Join-Path $PSScriptRoot '../XIII2_Test_XboxDLC.ps1') -Out $out -Game $game -LrRoot $lr -Content (Join-Path $case 'content') -Steam (Join-Path $case 'steam') -SourceZip $SourceZip -Voice $(if($mode -eq 'japanese'){'jp'}else{'en'})}catch{$threw=$true}
+  if($threw -ne ($mode -notin @('success','japanese'))){throw "Unexpected failure result: $mode"}
   if([IO.File]::ReadAllText((Join-Path $out 'userdata/saves/keep.sav')) -ne 'unchanged save fixture'){throw 'Save data changed'}
   if($mode -in @('missing-backup','game-running')){
    if($global:X2XboxFixture.calls -ne 0){throw 'Preflight failure invoked builder'}
@@ -46,8 +46,9 @@ try {
    $stash=@(Get-ChildItem -LiteralPath (Join-Path $out 'save_backups') -Directory -Filter 'xbox-dlc-test-*')[0].FullName
    if(@(Get-ChildItem -LiteralPath (Join-Path $stash 'converted-packages') -Directory).Count -ne 3){throw 'Converted packages not retained'}
    if(-not(Test-Path -LiteralPath (Join-Path $stash 'movies_steam'))){throw 'Steam movie override not quarantined'}
+   if([IO.File]::ReadAllText((Join-Path $out 'userdata/voice.txt')) -ne $(if($mode -eq 'japanese'){'jp'}else{'en'})){throw 'Requested test language not selected'}
    if([IO.File]::ReadAllText((Join-Path $stash 'voice.txt')) -ne 'jp'){throw 'Prior voice preference not retained'}
-   $expected=if($mode -eq 'success'){2}else{1};if($global:X2XboxFixture.calls -ne $expected){throw 'Unexpected builder call count'}
+   $expected=if($mode -in @('success','japanese')){2}else{1};if($global:X2XboxFixture.calls -ne $expected){throw 'Unexpected builder call count'}
   }
   Write-Output "PASS Xbox DLC $mode (builder/game mocked; source ZIP extraction and bounded collector executed)"
  }
