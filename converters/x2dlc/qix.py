@@ -568,6 +568,30 @@ def fix_particle_references(pc, x):
     return bytes(out), len(indices)
 
 
+def fix_inline_resource_controls(pc, x):
+    """Inline controls use two s16 resource IDs, not one u32.
+
+    829E8E88 passes control+4 to 828F0CD0 when byte +1 is nonzero.
+    Require the typed wrapper, its self-relative inline pointer and tag 0.
+    Literal float controls and external control pointers are left untouched.
+    """
+    L = layout(pc)
+    if L is None or len(pc) != len(x): return x, 0
+    out, changed = bytearray(x), 0
+    for sig, at, count in L['inst']:
+        if sig != (16, ((0, 0),)): continue
+        for i in range(count):
+            wrapper = at + 16 * i
+            if wrapper < R or wrapper + 16 > len(pc): continue
+            pointer, tag = struct.unpack_from('<II', pc, wrapper)
+            control = wrapper + 8
+            if pointer + R != control or tag != 0 or pc[control + 1] == 0: continue
+            out[control:control + 4] = pc[control:control + 4]
+            _swap(out, pc, control + 4, 'hh')
+            changed += 1
+    return bytes(out), changed
+
+
 def fix_curves(pc, x):
     """Effect curve records: {u8 mode, u8 components, u16 zero, floats[]}.
 

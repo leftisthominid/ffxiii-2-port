@@ -64,4 +64,27 @@ class EffectIndices(unittest.TestCase):
         with patch.object(qix,'layout',return_value={'inst':[(sig,80,1)]}):
             self.assertEqual(qix.fix_leaf_indices(bytes(pc),bytes(pc)),(bytes(pc),0))
 
+class InlineResourceControls(unittest.TestCase):
+    def test_inline_resource_keeps_group_and_index_order(self):
+        pc=bytearray(256);struct.pack_into('<II',pc,80,40,0)
+        pc[88:92]=bytes([1,1,0,0]);struct.pack_into('<hh',pc,92,1,0)
+        bad=bytearray(pc);bad[92:96]=pc[92:96][::-1]
+        with patch.object(qix,'layout',return_value={'inst':[((16,((0,0),)),80,1)]}):
+            out,count=qix.fix_inline_resource_controls(bytes(pc),bytes(bad))
+        self.assertEqual(count,1);self.assertEqual(struct.unpack_from('>hh',out,92),(1,0))
+        self.assertEqual(out[:92],bad[:92]);self.assertEqual(out[96:],bad[96:])
+
+    def test_literal_external_and_unknown_wrappers_are_untouched(self):
+        for pointer,tag,flag,sig in [(40,0,0,(16,((0,0),))), (44,0,1,(16,((0,0),))),
+                                    (40,1,1,(16,((0,0),))), (40,0,1,(16,()))]:
+            pc=bytearray(256);struct.pack_into('<II',pc,80,pointer,tag);pc[89]=flag
+            native=bytes([23])*256
+            with patch.object(qix,'layout',return_value={'inst':[(sig,80,1)]}):
+                self.assertEqual(qix.fix_inline_resource_controls(bytes(pc),native),(native,0))
+
+    def test_truncated_wrapper_is_untouched(self):
+        pc=bytes(90)
+        with patch.object(qix,'layout',return_value={'inst':[((16,((0,0),)),80,1)]}):
+            self.assertEqual(qix.fix_inline_resource_controls(pc,pc),(pc,0))
+
 if __name__=='__main__':unittest.main()
