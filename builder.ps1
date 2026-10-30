@@ -6,8 +6,10 @@ $Here=$PSScriptRoot
 . (Join-Path $Here 'builder\iso.ps1')
 . (Join-Path $Here 'builder\inputs.ps1')
 . (Join-Path $Here 'builder\pipeline.ps1')
+. (Join-Path $Here 'builder\moogle.ps1')
 
 function Say([string]$text,[string]$color='') {
+    $text = Format-MogMessage $text
     if ($color) { Write-Host $text -ForegroundColor $color } else { Write-Host $text }
 }
 function Ask-YesNo([string]$question) {
@@ -31,14 +33,15 @@ function Show-Opening {
     Clear-Host
     Say 'Final Fantasy XIII-2 - Triumtemporate Edition - builder' 'Cyan'
     Say ''
-    if (Ask-YesNo 'Lightning Farron is bae.') { Say 'Correct.' 'Green' }
-    elseif (Ask-YesNo 'That looks like a typo. Lightning Farron is bae.') { Say 'Correct now.' 'Green' }
-    else { Say 'You are in the wrong place. Hopefully playing this game teaches you that your answer was wrong.' 'Magenta' }
+    if (Ask-YesNo 'Lightning Farron is bae, kupo!') { Say 'Correct, kupo!' 'Green' }
+    elseif (Ask-YesNo 'Was that a typo, kupo? Lightning Farron is bae.') { Say 'Correct now, kupo!' 'Green' }
+    else { Say 'Hopefully playing this game changes your mind, kupo!' 'Magenta' }
     Say ''
-    Say 'Before you go on, know how this was made.'
+    Say 'Before we begin, let me tell you how this was made, kupo.'
     Say 'This project uses generative AI coding, including Claude (Anthropic) and ChatGPT (OpenAI).'
     Say 'leftisthominid directs the work and tests the game. It builds on the Lightning Returns port.'
-    if (-not (Ask-YesNo 'Are you OK with this?')) { Say 'OK. Nothing was changed or written. Goodbye.'; exit 10 }
+    if (-not (Ask-YesNo 'Are you OK with how this project was made, kupo?')) { Say 'Understood, kupo. Nothing was changed or written. Goodbye!'; exit 10 }
+    Say "Then let's get started!"
     Say ''
     Say 'Windows build. Android is on hold.'
     Say 'Original Xbox 360 DLC and Japanese voices/lip-sync have worked in user testing.'
@@ -77,10 +80,11 @@ try {
             $state.output=$candidate
             New-Item -ItemType Directory -Path $candidate -Force | Out-Null
         } else { $state.output=Ask-Output $state }
-        $state.shortcut=Ask-YesNo 'Put a Final Fantasy XIII-2 shortcut on the desktop?'
+        $state.shortcut=Ask-YesNo 'Shall I put a Final Fantasy XIII-2 shortcut on your desktop, kupo?'
         Invoke-Pipeline $state
     } elseif (-not $state.finished) {
-        Say "Resuming the build in $($state.output)." 'Cyan'
+        Say "Welcome back! Your choices are saved. Picking up where we left off, kupo!"
+        Say "Build folder: $($state.output)" 'Cyan'
         Invoke-Pipeline $state
     } else {
         $choice=Ask-Choice 'Final Fantasy XIII-2 is already built. What do you want to do?' @(
