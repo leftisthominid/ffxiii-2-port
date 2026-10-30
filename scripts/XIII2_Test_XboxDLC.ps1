@@ -24,7 +24,7 @@ if (Test-Path -LiteralPath $tracking) {
     foreach ($line in @(Get-Content -LiteralPath $tracking)) {
         if (-not $line.Trim()) { continue }
         $fields = $line -split "`t", 2
-        if ($fields.Count -ne 2 -or $fields[0] -notmatch '^[0-9A-Fa-f]{40}$') { throw 'Invalid Xbox DLC backup record; nothing restored.' }
+        if ($fields.Count -ne 2 -or $fields[0] -notmatch '^[0-9A-Fa-f]{40}(?:[0-9A-Fa-f]{2})?$') { throw 'Invalid Xbox DLC backup record; nothing restored.' }
         $destination = Join-Path $packages $fields[0]
         $backup = Join-Path $fields[1] $fields[0]
         if (-not (Test-Path -LiteralPath $destination -PathType Container) -and -not (Test-Path -LiteralPath $backup -PathType Container)) {
@@ -76,7 +76,7 @@ try {
         if (-not (Test-Path -LiteralPath $item.Destination -PathType Container)) { throw "Original package was not restored: $($item.Name)" }
     }
     if (@(Get-ChildItem -LiteralPath $packages -Directory -Filter 'XIII2SteamDLC*').Count) { throw 'Converted Steam DLC remains mounted.' }
-    $originals = @(Get-ChildItem -LiteralPath $packages -Directory | Where-Object { $_.Name -match '^[0-9A-Fa-f]{40}$' })
+    $originals = @(Get-ChildItem -LiteralPath $packages -Directory | Where-Object { $_.Name -match '^[0-9A-Fa-f]{40}(?:[0-9A-Fa-f]{2})?$' })
     if (-not $originals.Count) { throw 'No original Xbox DLC packages found; game was not started.' }
     $steps += 'Original package folders: ' + (($originals | ForEach-Object {$_.Name}) -join ', ')
     Write-Host "Xbox DLC restored. Converted content retained in $backupRoot" -ForegroundColor Green

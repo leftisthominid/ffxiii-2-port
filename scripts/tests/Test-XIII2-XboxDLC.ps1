@@ -19,15 +19,15 @@ function powershell.exe {
  $global:LASTEXITCODE=0
 }
 try {
- foreach($mode in @('success','japanese','missing-backup','game-running','restore-failure')){
+ foreach($mode in @('success','japanese','legacy-40','invalid-record','missing-backup','game-running','restore-failure')){
   $case=Join-Path $root $mode;$out=Join-Path $case 'out';$lr=Join-Path $case 'lr';$game=Join-Path $case 'game'
   $packages=Join-Path $out 'userdata/0000000000000000/53510806/00000002'
-  $old=Join-Path $out 'save_backups/old';$name='A'*40;$native=Join-Path $packages $name;$backup=Join-Path $old $name
+  $old=Join-Path $out 'save_backups/old';$name=if($mode -eq 'legacy-40'){'A'*40}else{'58D2695DF8A6B290B161A2CF02C0839B1873EEF353'};$native=Join-Path $packages $name;$backup=Join-Path $old $name
   $tracking=Join-Path $out 'work/steamdlc/moved_360_packages.txt'
   foreach($folder in @($packages,$old,$game,(Join-Path $lr 'tools/python/tools'),(Split-Path $tracking),(Join-Path $out 'run/movies_steam'),(Join-Path $out 'userdata/saves'),(Join-Path $out 'logs'))){New-Item -ItemType Directory -Path $folder -Force|Out-Null}
   New-Item -ItemType SymbolicLink -Path (Join-Path $lr 'tools/python/tools/python.exe') -Target $Python|Out-Null
   foreach($id in @('0000021','0000023','0000071')){New-Item -ItemType Directory -Path (Join-Path $packages ('XIII2SteamDLC'+$id))|Out-Null}
-  [IO.File]::WriteAllText($tracking,"$name`t$old")
+  [IO.File]::WriteAllText($tracking,$(if($mode -eq 'invalid-record'){"..\bad`t$old"}else{"$name`t$old"}))
   [IO.File]::WriteAllText((Join-Path $out 'userdata/voice.txt'),'jp')
   [IO.File]::WriteAllText((Join-Path $out 'userdata/saves/keep.sav'),'unchanged save fixture')
   [IO.File]::WriteAllText((Join-Path $out 'logs/run.log'),'Fixture only; no gameplay ran.')
@@ -36,9 +36,9 @@ try {
   $global:X2XboxFixture=@{mode=$mode;calls=0;out=$out;native=$native;backup=$backup;tracking=$tracking}
   $threw=$false
   try{& (Join-Path $PSScriptRoot '../XIII2_Test_XboxDLC.ps1') -Out $out -Game $game -LrRoot $lr -Content (Join-Path $case 'content') -Steam (Join-Path $case 'steam') -SourceZip $SourceZip -Voice $(if($mode -eq 'japanese'){'jp'}else{'en'})}catch{$threw=$true}
-  if($threw -ne ($mode -notin @('success','japanese'))){throw "Unexpected failure result: $mode"}
+  if($threw -ne ($mode -notin @('success','japanese','legacy-40'))){throw "Unexpected failure result: $mode"}
   if([IO.File]::ReadAllText((Join-Path $out 'userdata/saves/keep.sav')) -ne 'unchanged save fixture'){throw 'Save data changed'}
-  if($mode -in @('missing-backup','game-running')){
+  if($mode -in @('missing-backup','game-running','invalid-record')){
    if($global:X2XboxFixture.calls -ne 0){throw 'Preflight failure invoked builder'}
    if(@(Get-ChildItem -LiteralPath $packages -Directory -Filter 'XIII2SteamDLC*').Count -ne 3){throw 'Preflight failure moved packages'}
    if([IO.File]::ReadAllText((Join-Path $out 'userdata/voice.txt')) -ne 'jp'){throw 'Preflight failure changed voice'}
@@ -48,7 +48,7 @@ try {
    if(-not(Test-Path -LiteralPath (Join-Path $stash 'movies_steam'))){throw 'Steam movie override not quarantined'}
    if([IO.File]::ReadAllText((Join-Path $out 'userdata/voice.txt')) -ne $(if($mode -eq 'japanese'){'jp'}else{'en'})){throw 'Requested test language not selected'}
    if([IO.File]::ReadAllText((Join-Path $stash 'voice.txt')) -ne 'jp'){throw 'Prior voice preference not retained'}
-   $expected=if($mode -in @('success','japanese')){2}else{1};if($global:X2XboxFixture.calls -ne $expected){throw 'Unexpected builder call count'}
+   $expected=if($mode -in @('success','japanese','legacy-40')){2}else{1};if($global:X2XboxFixture.calls -ne $expected){throw 'Unexpected builder call count'}
   }
   Write-Output "PASS Xbox DLC $mode (builder/game mocked; source ZIP extraction and bounded collector executed)"
  }
