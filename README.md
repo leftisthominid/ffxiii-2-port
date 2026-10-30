@@ -1,0 +1,114 @@
+# Final Fantasy XIII-2 - Triumtemporate Edition
+
+A builder for a native Windows port, made from three copies of the game: Xbox 360, PS3, and Steam.
+
+This builds a native Windows version of **Final Fantasy XIII-2** from **your own copy of the
+Xbox 360 game**, with what your PS3 and Steam copies add. The Xbox 360 code is recompiled to
+C++ on your machine (with [ReXGlue](https://github.com/rexglue/rexglue-sdk)) and built into a
+normal game program. Game executables, generated game code, data, and art are not distributed
+in this repository. Without your own copy of the game there is nothing to build.
+
+## How this was made
+
+This project uses AI-assisted coding and investigation, maintained and directed by
+[leftisthominid](https://github.com/leftisthominid). It builds on the tools and porting work in
+[Lightning Returns: Final Fantasy XIII - Triumfulgurate Edition](https://github.com/leftisthominid/lr-ffxiii-port).
+Source changes still need review and gameplay testing.
+
+## What you need
+
+- **The Xbox 360 game** (required): the USA disc image, extracted game folder, or Games on
+  Demand copy from your console. The builder extracts it as needed and checks the supported executable.
+- **The Xbox 360 title update** (required): version 0.0.1.13, supplied separately from the
+  original game files. On the console, open **Settings > System > Storage**, find the update
+  under **Games and Apps > Final Fantasy XIII-2**, and **Move it to a USB flash drive — do not
+  use Copy**. Moving transfers it off the console's original storage device. On your PC,
+  extract `tu0000000d_00000000` from the flash drive's Xbox content storage, under
+  `Content\0000000000000000\53510806\000B0000`.
+- Optional, each adds something:
+  - **The PS3 disc image**: PS3 cinematics and button / UI assets.
+  - **The Steam version**: Japanese voices and experimental conversion of Steam DLC content.
+    Text language is selected separately; Japanese voices do not require installing the
+    Steam-derived DLC packages.
+  - **Xbox 360 DLC**: the original DLC episodes, Coliseum encounters, outfits, and weapons.
+    Original Xbox DLC has worked in user testing with both English and Japanese voices.
+  - **PS3 or Steam saves**: import support is experimental; keep backups of your saves.
+- Windows 10 or 11, 64-bit, free space for the game files and build, and an internet connection
+  for the build tools.
+- Microsoft's Visual Studio 2022 Build Tools with **Desktop development with C++** and the
+  Windows SDK. The builder offers to install these if missing and downloads its other tools
+  at pinned versions checked by SHA256. An existing Lightning Returns installation is not needed.
+
+## Status
+
+Experimental. The Windows build has started and been played on one PC. The user reports that
+original Xbox 360 DLC works with both English and Japanese voices, and that the tested base-game
+Japanese lip-sync setup works. This does not establish that every scene, battle, or save works.
+
+**Steam-derived DLC conversion is still buggy.** Omega has crashed and Lightning and Caius have
+rendered incorrectly in Valhalla with converted Steam DLC. The base game works without Xbox
+360 DLC. Steam DLC conversion is a separate, explicit experimental choice; Japanese voices do
+not enable it. Original Xbox DLC is the supported content source when available.
+
+The builder enables Japanese audio and base-game lip-sync when a Steam copy is supplied.
+Voice Language and Text Language remain separate settings. Some dialogue falls back to English
+when a matching Japanese replacement cannot be prepared. DLC lip-sync remains experimental.
+
+**The Android version is on hold.** Current development and testing focus on Windows.
+
+## Use
+
+Get the builder: **Code > Download ZIP** on this page (or `git clone`), and unpack it anywhere.
+
+Double-click **`Build Final Fantasy XIII-2.bat`**. It starts `builder.ps1`, explains how the
+project was made, asks for your game copies and title update, and builds the Windows program.
+Optional PS3 files, Steam files, and original Xbox DLC can be skipped and added later. Android
+is on hold and is not offered as a build target.
+
+Choose a new, empty output folder outside your source game folders. A stopped build resumes
+from its last completed step. Running the builder again offers updates, additional content,
+and rebuilding the program or everything while keeping saves. The builder extracts the app
+icon from your own Xbox executable and embeds it in the Windows EXE; it can also create a
+desktop shortcut.
+
+Your source game files are only read. Build output and prepared content are written to the
+output folder; rerunning the builder reuses work where the relevant checks permit it. Keep
+save backups when trying a different content setup or importing saves.
+
+To play on Windows, double-click **`ffxiii2.exe`** in the output folder's **`run`** directory,
+or use the desktop shortcut. The port's
+settings are under **Settings > Port Settings**, including Voice Language, Text Language,
+Button Prompts, frame rate, anti-aliasing, and Story Recaps. Restart when prompted after
+changing language. Higher frame rates and settings combinations still need gameplay testing.
+
+## What is in this repository
+
+| Folder | What |
+|---|---|
+| `Build Final Fantasy XIII-2.bat`, `builder.ps1`, `builder\` | the interactive builder, resumable pipeline, and content preparation |
+| `project\` | the ReXGlue project: CMake files, the recompiler manifest and function hints, and the port's own code (`src\`) |
+| `converters\` | game-format, texture, shader, movie, and Japanese voice converters |
+| `scripts\` | content / save import, packaging, and verification tools |
+| `releases\` | source-only builder packages and checksum manifests |
+
+## Credits
+
+- **[leftisthominid](https://github.com/leftisthominid)**: project maintainer, direction, and
+  testing coordination; the [Lightning Returns port](https://github.com/leftisthominid/lr-ffxiii-port)
+  provides shared tools and porting work.
+- **[ReXGlue SDK](https://github.com/rexglue/rexglue-sdk)**: the recompiler, runtime, and renderer
+  this port is built on (BSD-3-Clause), itself derived from **[Xenia](https://github.com/xenia-project/xenia)**.
+- **Surihix / WhiteBinTools**: the file-list / archive work credited in the converter source.
+- Downloaded or used by the builder: LLVM, CMake, Ninja,
+  [Real-ESRGAN](https://github.com/xinntao/Real-ESRGAN), FFmpeg (Gyan's Windows builds), Python,
+  NumPy, and the libraries used by the ReXGlue SDK, each under its own license.
+
+Shared components retain their existing attribution. The icon and Xbox extraction tools are adapted from the Lightning Returns builder.
+The icon converter uses stb image libraries under their included licenses.
+
+## Licenses
+
+The port's own code: GNU General Public License v3.0 (`LICENSE`). The ReXGlue / Xenia license
+notices are in `LICENSES\`; every other third-party component keeps its own license. Game
+content remains the property of its respective owners. Final Fantasy XIII-2 is © SQUARE ENIX;
+this project is not affiliated with or endorsed by Square Enix or Microsoft.

@@ -600,6 +600,9 @@ class Ffxiii2App : public rex::ReXApp {
       if (value.size() >= 2 && value.front() == '"' && value.back() == '"') value = value.substr(1, value.size() - 2);
       if (key == "game_data_root" && paths.game_data_root.empty()) {
         paths.game_data_root = resolve(value);
+      } else if (key == "user_data_root" && REXCVAR_GET(user_data_root).empty()) {
+        paths.user_data_root = resolve(value);
+        if (REXCVAR_GET(cache_root).empty()) paths.cache_root = paths.user_data_root / "cache";
       } else if (key == "update_data_root" && paths.update_data_root.empty()) {
         paths.update_data_root = resolve(value);
       } else if (key.rfind("LR_", 0) == 0) {

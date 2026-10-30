@@ -7,6 +7,7 @@ function Invoke-Logged {
   param($exe,$arguments,$log)
   if ($arguments[0] -eq '--strip-lipsync') { throw 'Old voice identities must be rebuilt' }
   $script:calls++
+  $script:lastArguments=@($arguments)
   $stage = $arguments[-1]
   New-Item -ItemType Directory -Path $stage | Out-Null
   [IO.File]::WriteAllText((Join-Path $stage 'filelist_patch_u.x360.bin'),'new voice identities')
@@ -38,5 +39,13 @@ try {
     if ($script:calls -ne $expected) { throw 'Current cache rebuilt unnecessarily' }
     Write-Output "PASS voice cache version $old"
   }
+  $script:calls=0
+  Convert-X2JpVoice @{} 'game' $steam 'ffmpeg' $out $work $logs -LipSync
+  if ($script:calls -ne 1 -or $script:lastArguments -notcontains '--lipsync') {throw 'Lip-sync did not invalidate the audio-only cache or enable the converter flag'}
+  Convert-X2JpVoice @{} 'game' $steam 'ffmpeg' $out $work $logs -LipSync
+  if ($script:calls -ne 1) {throw 'Lip-sync cache was not reused'}
+  Convert-X2JpVoice @{} 'game' $steam 'ffmpeg' $out $work $logs
+  if ($script:calls -ne 2 -or $script:lastArguments -contains '--lipsync') {throw 'Audio-only conversion reused the lip-sync cache'}
+  Write-Output 'PASS independent lip-sync cache and converter flag'
   if ([IO.File]::ReadAllText($source) -ne 'read-only source fixture') { throw 'Source changed' }
 } finally { Remove-Item -LiteralPath $root -Recurse -Force }

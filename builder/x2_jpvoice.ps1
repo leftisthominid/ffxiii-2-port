@@ -106,13 +106,14 @@ function Convert-X2JpDlcVoices($t, [string]$steam, [string]$ffmpeg, [string]$dlc
   }
 }
 
-function Convert-X2JpVoice($t, [string]$game, [string]$steam, [string]$ffmpeg, [string]$out, [string]$work, [string]$logs) {
+function Convert-X2JpVoice($t, [string]$game, [string]$steam, [string]$ffmpeg, [string]$out, [string]$work, [string]$logs, [switch]$LipSync) {
   if (-not (Test-Path -LiteralPath (Join-Path $steam 'alba_data\sys\filelistc.win32.bin'))) {
     throw "no Japanese voice data in $steam (alba_data\sys\filelistc.win32.bin)"
   }
+  $version = $script:X2JpVoiceVersion + $(if ($LipSync) { '-lipsync' } else { '' })
   $versionFile = Join-Path $out 'version.txt'
   $have = if (Test-Path -LiteralPath $versionFile) { Get-Content -LiteralPath $versionFile -TotalCount 1 } else { '' }
-  if ($have -eq $script:X2JpVoiceVersion -and (Test-Path -LiteralPath (Join-Path $out 'filelist_patch_u.x360.bin'))) {
+  if ($have -eq $version -and (Test-Path -LiteralPath (Join-Path $out 'filelist_patch_u.x360.bin'))) {
     Say "  already converted ($out)"
     return
   }
@@ -124,7 +125,9 @@ function Convert-X2JpVoice($t, [string]$game, [string]$steam, [string]$ffmpeg, [
   if (Test-Path -LiteralPath $tmp) { Remove-Item -LiteralPath $tmp -Recurse -Force }
   Say '  converting the Japanese voices and lip-sync (10-30 minutes)...'
   $log = Join-Path $logs 'jpvoice.log'
-  $rc = Invoke-Logged $exe @('--ffmpeg', $ffmpeg, $game, $steam, $tmp) $log
+  $arguments = @('--ffmpeg', $ffmpeg, $game, $steam, $tmp)
+  if ($LipSync) { $arguments = @('--lipsync') + $arguments }
+  $rc = Invoke-Logged $exe $arguments $log
   Get-Content -LiteralPath $log -ErrorAction SilentlyContinue | Where-Object { $_ -match '^(English voice|Japanese lip|Voices converted|Voice size|Voice files kept|Wrote|  kept English|  lip-sync kept)' } |
     Select-Object -First 12 | ForEach-Object { Say "    $_" }
   if ($rc -ne 0 -and $rc -ne 3) {
@@ -133,7 +136,7 @@ function Convert-X2JpVoice($t, [string]$game, [string]$steam, [string]$ffmpeg, [
   }
   if (Test-Path -LiteralPath $out) { Remove-Item -LiteralPath $out -Recurse -Force }
   Move-Item -LiteralPath $tmp -Destination $out
-  Set-Content -LiteralPath $versionFile -Value $script:X2JpVoiceVersion
+  Set-Content -LiteralPath $versionFile -Value $version
   if ($rc -eq 3) { Say '  fewer than half of the voice files converted; the others stay English' 'Yellow' }
   Say "  Japanese voices in $out (Settings > Port Settings > Voice Language)"
 }
