@@ -25,7 +25,9 @@ function powershell.exe {
     else { $global:LASTEXITCODE = 0 }
 }
 try {
-    foreach ($mode in @('collect-only','success','two-runs','install-failure','game-failure','wrong-zip','game-running')) {
+    $modes = @('collect-only','success','two-runs','install-failure','game-failure','wrong-zip','game-running')
+    if ([int]$version -ge 46) { $modes += 'full-collection' }
+    foreach ($mode in $modes) {
         $global:XIII2LauncherTestState.mode = $mode; $global:XIII2LauncherTestState.calls = 0; $global:XIII2LauncherTestState.opened = 0
         $case = Join-Path $root $mode
         $downloads = Join-Path $case 'Downloads'
@@ -50,7 +52,8 @@ try {
         $threw = $false
         try {
             $params = @{Out=$gameOut;LrRoot=$lr;Steam=$steam;Game=(Join-Path $case 'base')}
-            if ($mode -eq 'collect-only') { $params.CollectOnly = $true }
+            if ($mode -in @('collect-only','full-collection')) { $params.CollectOnly = $true }
+            if ($mode -eq 'full-collection') { $params.FullCollection = $true }
             if ($mode -eq 'two-runs') { $params.GameSessions = 2 }
             if ($mode -eq 'wrong-zip') { $params.ZipPath = Join-Path $downloads 'XIII-2_Test (3).zip' }
             & $launcher @params
@@ -66,7 +69,12 @@ try {
             $sessions = @(Get-ChildItem -LiteralPath $downloads -Directory -Filter ('XIII-2_v' + $version + '_*'))
             if ($sessions.Count -ne 1) { throw 'Expected one result session' }
             $upload = Join-Path $sessions[0].FullName 'Upload-these-zips'
-            if (-not (Test-Path -LiteralPath (Join-Path $upload 'XIII-2_DLC_Complete_Index.zip'))) { throw 'Comprehensive result index missing' }
+            if ([int]$version -lt 46 -or $mode -eq 'full-collection') {
+                if (-not (Test-Path -LiteralPath (Join-Path $upload 'XIII-2_DLC_Complete_Index.zip'))) { throw 'Explicit comprehensive result index missing' }
+            } else {
+                if (-not (Test-Path -LiteralPath (Join-Path $upload 'XIII-2_Diagnostics_01.zip'))) { throw 'Bounded diagnostics missing' }
+                if (Test-Path -LiteralPath (Join-Path $upload 'XIII-2_DLC_Complete_Index.zip')) { throw 'Default collection used comprehensive mode' }
+            }
             $status = Get-Content -LiteralPath (Join-Path $upload 'collection-status.json') -Raw | ConvertFrom-Json
             if ($status.fatal) { throw 'Fixture collection unexpectedly failed' }
             $source = Get-Content -LiteralPath (Join-Path $sessions[0].FullName 'source-version.json') -Raw | ConvertFrom-Json
