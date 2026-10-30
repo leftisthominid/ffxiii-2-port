@@ -1,0 +1,4 @@
+aef0e888a95b4095d2031fd4e2c81d2218eccd0c9ec9b69370101f0d9cc5e4f5  XIII-2_Test.zip
+c16f80655801c4127be2a0c2daefa28e5b64dbb1df480b748404b3fcac378dac  Run-XIII2-v45.ps1
+63d08ece3ccbd0843a5c98fcaa22da568c295ace866427ac51e039d7f5aa99f5  source-files.json
+184a0ff1346ae60a2d4341a8e30a6272eb361abc27cbb90a5dae3792f408dbba  .gitattributes

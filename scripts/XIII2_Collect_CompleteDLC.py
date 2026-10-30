@@ -10,7 +10,8 @@ def open_upload_folder(folder):
 def collect_generated(folder, emit, note, progress=lambda path:None, limit=1<<20):
     """Only selected generated function definitions; never arbitrary user documents."""
     import re
-    targets = {'sub_828F0CD0', 'sub_829E8E88', 'sub_829C51E0', 'sub_82B04830', 'sub_82B04E48'}
+    targets = {'sub_828F0CD0', 'sub_829E8E88', 'sub_829C51E0', 'sub_82B04830', 'sub_82B04E48',
+               'sub_828D1010', 'sub_828E3640', 'sub_828CDE18'}
     found = set()
     marker = re.compile(rb'^DEFINE_REX_FUNC\((sub_[0-9A-Fa-f]{8})\)')
     for path in sorted(Path(folder).rglob('*.cpp')):

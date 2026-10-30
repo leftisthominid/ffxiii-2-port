@@ -571,12 +571,14 @@ if (Test-Path -LiteralPath $dlcForce) { Remove-Item -LiteralPath $dlcForce -Forc
 $jpDir = Join-Path $run 'jpvoice'
 $mergedDir = Join-Path $run 'update_merged'
 if ((Test-Path -LiteralPath (Join-Path $tuDir 'x2_title_update.txt')) -and (Test-Path -LiteralPath (Join-Path $jpDir 'filelist_patch_u.x360.bin'))) {
-  $stamp = Join-Path $mergedDir 'x2_merged.txt'
+  $stamp = Join-Path $mergedDir 'x2_merged_v2.txt'
   $newest = @(Get-ChildItem -LiteralPath $jpDir -File -Filter 'filelist_patch*.bin') + @(Get-Item -LiteralPath (Join-Path $tuDir 'x2_title_update.txt')) |
     Sort-Object LastWriteTime | Select-Object -Last 1
   if (-not (Test-Path -LiteralPath $stamp) -or (Get-Item -LiteralPath $stamp).LastWriteTime -lt $newest.LastWriteTime) {
     $exe = Join-Path (Join-Path $Out 'work') 'x2_jpvoice.exe'
     Build-X2Converter $t (Join-Path $Here 'converters\x2_jpvoice.cpp') $exe
+    # Invalidate readiness before starting: a failed rebuild must use the original update.
+    Remove-Item -LiteralPath $stamp -Force -ErrorAction SilentlyContinue
     Say '  combining the title update and the Japanese voices...'
     $rc = Invoke-Logged $exe @('--merge-update', $tuDir, $jpDir, $mergedDir) (Join-Path $logs 'merge_update.log')
     Get-Content -LiteralPath (Join-Path $logs 'merge_update.log') -ErrorAction SilentlyContinue | ForEach-Object { Say "    $_" }
@@ -653,8 +655,8 @@ $missing = @(if ($runLogs) { Select-String -LiteralPath $runLogs -Pattern "NtCre
 Say ''
 Say 'Summary' 'Cyan'
 Say "  log lines: $lineCount; access violations: $av"
-if ($runLogs -and -not (Select-String -LiteralPath $runLogs -Pattern 'XIII-2 build: test v44' -Quiet)) {
-  Say '  THE GAME THAT RAN IS AN OLDER BUILD (no "XIII-2 build: test v44" line in the log)' 'Red'
+if ($runLogs -and -not (Select-String -LiteralPath $runLogs -Pattern 'XIII-2 build: test v45' -Quiet)) {
+  Say '  THE GAME THAT RAN IS AN OLDER BUILD (no "XIII-2 build: test v45" line in the log)' 'Red'
 }
 if ($runLogs -and -not (Select-String -LiteralPath $runLogs -Pattern 'XEX patch applied successfully' -Quiet)) {
   Say '  THE TITLE UPDATE PATCH WAS NOT APPLIED (no "XEX patch applied" line in the log)' 'Red'

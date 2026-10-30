@@ -5,7 +5,9 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 $root = Join-Path $ScratchRoot ('release-launcher-test-' + [guid]::NewGuid().ToString('N'))
-$launcher = Join-Path $ReleaseDir 'Run-XIII2-v44.ps1'
+$version = (Split-Path $ReleaseDir -Leaf) -replace '^v',''
+if ($version -notmatch '^\d+$') { throw 'ReleaseDir must end with v and a numeric version' }
+$launcher = Join-Path $ReleaseDir ('Run-XIII2-v' + $version + '.ps1')
 $sourceZip = Join-Path $ReleaseDir 'XIII-2_Test.zip'
 $oldProfile = $env:USERPROFILE
 if (Test-Path variable:global:XIII2LauncherTestState) { throw 'Launcher test state already exists; use an isolated PowerShell process.' }
@@ -39,7 +41,7 @@ try {
         [IO.File]::WriteAllText((Join-Path $gameOut 'logs/run.log'),'Launcher fixture only; no gameplay ran.')
         $generated = Join-Path $gameOut 'project/generated/default'
         New-Item -ItemType Directory -Path $generated -Force | Out-Null
-        $definitions = (@('828F0CD0','829E8E88','829C51E0','82B04830','82B04E48') | ForEach-Object { "DEFINE_REX_FUNC(sub_$_) {`nreturn;`n}`n" }) -join ''
+        $definitions = (@('828F0CD0','829E8E88','829C51E0','82B04830','82B04E48','828D1010','828E3640','828CDE18') | ForEach-Object { "DEFINE_REX_FUNC(sub_$_) {`nreturn;`n}`n" }) -join ''
         [IO.File]::WriteAllText((Join-Path $generated 'fixture.cpp'),$definitions)
         $zip = Join-Path $downloads 'XIII-2_Test (2).zip'
         Copy-Item -LiteralPath $sourceZip -Destination $zip
@@ -61,7 +63,7 @@ try {
             if ($global:XIII2LauncherTestState.opened -ne 0) { throw 'Rejected input opened a result folder' }
         } else {
             if ($global:XIII2LauncherTestState.opened -ne 1) { throw 'Result folder did not open exactly once' }
-            $sessions = @(Get-ChildItem -LiteralPath $downloads -Directory -Filter 'XIII-2_v44_*')
+            $sessions = @(Get-ChildItem -LiteralPath $downloads -Directory -Filter ('XIII-2_v' + $version + '_*'))
             if ($sessions.Count -ne 1) { throw 'Expected one result session' }
             $upload = Join-Path $sessions[0].FullName 'Upload-these-zips'
             if (-not (Test-Path -LiteralPath (Join-Path $upload 'XIII-2_DLC_Complete_Index.zip'))) { throw 'Comprehensive result index missing' }

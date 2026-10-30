@@ -14,6 +14,8 @@ struct X2EffectLookupCapture {
   int16_t group = 0, index = 0;
   uint32_t resource = 0;
   bool complete = false;
+  bool source_bounds_known = false, index_in_source_bounds = false;
+  uint16_t source_resource_count = 0;
   std::string stage;
   std::vector<X2EffectCaptureRange> ranges;
 };
@@ -52,7 +54,21 @@ inline X2EffectLookupCapture X2CaptureEffectLookup(
   const uint32_t entry = table + ordinal * 20;
   p = capture("selected-group", entry, 20);
   if (!p) return out;
+  const uint32_t source = word(p + 4);
   const uint32_t array = word(p + 16);
+  // 828D1010 creates each 20-byte group through 828E3640. The latter
+  // stores its 40-byte source metadata at +4, reads a descriptor at source+0,
+  // and fills exactly u16[descriptor+8] pointer slots. Keep this optional:
+  // damaged metadata must not hide the original lookup chain or bad pointer.
+  if (auto metadata = capture("group-source", source, 40)) {
+    const uint32_t descriptor = word(metadata);
+    if (auto header = capture("group-source-descriptor", descriptor, 16)) {
+      out.source_resource_count = uint16_t(header[8]) << 8 | header[9];
+      out.source_bounds_known = true;
+      out.index_in_source_bounds = out.index >= 0 &&
+          uint32_t(out.index) < out.source_resource_count;
+    }
+  }
   const uint32_t slot = array + uint32_t(int32_t(out.index)) * 4;
   p = capture("selected-slot", slot, 4);
   if (!p) return out;

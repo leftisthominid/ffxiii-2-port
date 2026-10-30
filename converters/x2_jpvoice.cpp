@@ -1889,6 +1889,44 @@ static int merge_update(const fs::path& tu, const fs::path& voices, const fs::pa
   fs::create_directories(tmp);
   const char* lists[2] = {"filelist_patch_u.x360.bin", "filelist_patch_scr_u.x360.bin"};
   const char* archives[2] = {"white_patch_u.x360.bin", "white_patch_scr_u.x360.bin"};
+  // Validate both inputs before constructing or publishing a merged update.
+  // A marker alone is not evidence that a title-update archive is complete.
+  std::map<uint64_t, std::string> declared_lips;
+  {
+    std::ifstream manifest(voices / "jp_lipsync.txt");
+    std::string line;
+    while (std::getline(manifest, line)) {
+      const auto space = line.find(' ');
+      if (space == std::string::npos) continue;
+      declared_lips.emplace(std::stoull(line.substr(0, space), nullptr, 16), lower(line.substr(space + 1)));
+    }
+  }
+  bool title_data = false;
+  for (int k = 0; k < 2; ++k) {
+    for (const auto& root : {tu, voices}) {
+      const bool list = fs::is_regular_file(root / lists[k]);
+      const bool archive = fs::is_regular_file(root / archives[k]);
+      if (list != archive) throw std::runtime_error("incomplete update list/archive pair in " + root.string());
+      if (!list) continue;
+      if (root == tu) title_data = true;
+      const auto size = fs::file_size(root / archives[k]);
+      std::set<std::pair<uint8_t, uint32_t>> identities;
+      for (const auto& entry : parse_filelist(read_file(root / lists[k]))) {
+        if (!identities.insert({entry.ftype, entry.code}).second)
+          throw std::runtime_error("duplicate update identity: " + entry.path);
+        if (entry.sector > size / 2048 || entry.csize > size - entry.sector * 2048)
+          throw std::runtime_error("update entry outside archive: " + entry.path);
+        const auto path = lower(entry.path);
+        const auto declared = declared_lips.find(uint64_t(entry.ftype) << 32 | entry.code);
+        const bool lip_path = path.rfind("mot/", 0) == 0 || path.rfind("event/", 0) == 0 ||
+            path.rfind("zone/lip/", 0) == 0 || path.rfind("sound/pack/caption/", 0) == 0;
+        const bool lip = lip_path && declared != declared_lips.end() && declared->second == path;
+        if (root == voices && !is_english_voice(path) && !lip)
+          throw std::runtime_error("non-dialogue asset in voice patch: " + entry.path);
+      }
+    }
+  }
+  if (!title_data) throw std::runtime_error("title update has no complete patch archive");
   for (auto& e : fs::recursive_directory_iterator(tu)) {
     if (!e.is_regular_file()) continue;
     fs::path rel = fs::relative(e.path(), tu);
@@ -1915,7 +1953,14 @@ static int merge_update(const fs::path& tu, const fs::path& voices, const fs::pa
     std::ofstream arc(tmp / archives[k], std::ios::binary);
     if (has_tu) {
       for (auto& e : parse_filelist(read_file(tl))) {
-        if (voiced.count({e.ftype, e.code})) { replaced++; continue; }
+        if (voiced.count({e.ftype, e.code})) {
+          const auto replacement = std::find_if(ve.begin(), ve.end(), [&](const Entry& v) {
+            return v.ftype == e.ftype && v.code == e.code;
+          });
+          if (lower(replacement->path) != lower(e.path))
+            throw std::runtime_error("voice/title-update identity collision: " + e.path);
+          replaced++; continue;
+        }
         files.push_back({e.code, e.ftype, e.path, e.sector, e.usize, e.csize != e.usize ? e.csize : 0});
         from_tu++;
       }
@@ -1943,7 +1988,7 @@ static int merge_update(const fs::path& tu, const fs::path& voices, const fs::pa
     std::ifstream vv(voices / "version.txt");
     std::string vver;
     std::getline(vv, vver);
-    std::ofstream(tmp / "x2_merged.txt") << stamp << " | voices " << vver << "\n";
+    std::ofstream(tmp / "x2_merged_v2.txt") << stamp << " | voices " << vver << "\n";
   }
   fs::remove_all(out, ec);
   fs::rename(tmp, out);
