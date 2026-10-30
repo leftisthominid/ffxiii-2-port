@@ -479,6 +479,13 @@ void log_guest_regs(const char* tag, const PPCContext* c) {
           });
       REXLOG_ERROR("{}: effect selected group {} index {} resource {:08X}, capture {} at {}",
                    tag, lookup.group, lookup.index, lookup.resource, lookup.complete ? "complete" : "incomplete", lookup.stage);
+      if (lookup.source_bounds_known) {
+        REXLOG_ERROR("{}: effect source declares {} resources; selected index {} is {} its bounds",
+                     tag, lookup.source_resource_count, lookup.index,
+                     lookup.index_in_source_bounds ? "inside" : "outside");
+      } else {
+        REXLOG_ERROR("{}: effect source resource count unavailable; index bounds unknown", tag);
+      }
       for (const auto& range : lookup.ranges) {
         std::string hex;
         for (auto byte : range.bytes) hex += fmt::format("{:02X}", byte);

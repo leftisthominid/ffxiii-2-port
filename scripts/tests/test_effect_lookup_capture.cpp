@@ -20,6 +20,21 @@ int main() {
   auto result=X2CaptureEffectLookup(0x10000,0x10900,read);
   assert(result.group==0&&result.index==1&&result.resource==0x10700&&result.complete);
   assert(result.stage=="resource-header"&&result.ranges.back().bytes.size()==64);
+  assert(!result.source_bounds_known); // optional source absent, lookup still completes
+  w32(0x10304,0x10A00);w32(0x10A00,0x10B00);
+  memory[0x10B08]=0;memory[0x10B09]=2;
+  result=X2CaptureEffectLookup(0x10000,0x10900,read);
+  assert(result.source_bounds_known&&result.source_resource_count==2&&result.index_in_source_bounds);
+  memory[0x10B09]=1;
+  result=X2CaptureEffectLookup(0x10000,0x10900,read);
+  assert(result.source_bounds_known&&!result.index_in_source_bounds&&result.complete);
+  w32(0x10900,0x0000FFFF); // negative index is outside source bounds
+  result=X2CaptureEffectLookup(0x10000,0x10900,read);
+  assert(result.index==-1&&result.source_bounds_known&&!result.index_in_source_bounds);
+  w32(0x10900,0x00000001);
+  w32(0x10A00,0xFFFFFFFC); // damaged descriptor does not suppress the selected pointer
+  result=X2CaptureEffectLookup(0x10000,0x10900,read);
+  assert(!result.source_bounds_known&&result.complete&&result.resource==0x10700);
   w32(0x10900,0xFFFF0001); // negative group -1 uses the other table
   result=X2CaptureEffectLookup(0x10000,0x10900,read);
   assert(result.group==-1&&result.resource==0x10800);
@@ -32,5 +47,5 @@ int main() {
   assert(result.stage=="node"&&result.ranges.size()==2);
   result=X2CaptureEffectLookup(0x10000,0,read);
   assert(result.stage=="references"&&result.ranges.empty());
-  std::cout<<"PASS effect capture: positive and negative tables, exact bad pointer, unreadable and overflow bounds\n";
+  std::cout<<"PASS effect capture: positive and negative tables, source-declared index bounds, exact bad pointer, unreadable and overflow bounds\n";
 }

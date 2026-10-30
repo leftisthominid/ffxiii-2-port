@@ -97,7 +97,7 @@ class CompleteCollection(unittest.TestCase):
             (game/'userdata/private-context.txt').write_text('DO NOT INCLUDE PRIVATE CONTEXT')
             (work/'private-context.txt').write_text('DO NOT INCLUDE PRIVATE CONTEXT')
             generated = game/'project/generated/default'; generated.mkdir(parents=True)
-            targets = ('828F0CD0','829E8E88','829C51E0','82B04830','82B04E48')
+            targets = ('828F0CD0','829E8E88','829C51E0','82B04830','82B04E48','828D1010','828E3640','828CDE18')
             (generated/'functions.cpp').write_text(''.join('DEFINE_REX_FUNC(sub_'+a+') {\nreturn;\n}\n' for a in targets))
             result = subprocess.run([sys.executable, str(SCRIPT), '--source', str(ROOT), '--out', str(out),
                                      '--game-output', str(game), '--steam', str(root/'steam'), '--base-game', str(root/'base')],
@@ -122,7 +122,7 @@ class CompleteCollection(unittest.TestCase):
                 records = json.load(t.extractfile('assets.json'))
                 self.assertEqual({a['origin'] for a in records}, {'installed','Japanese-active'})
                 self.assertEqual(t.extractfile('objects/'+hashlib.sha256(data).hexdigest()+'.bin').read(), data)
-                self.assertEqual(sum(n.startswith('generated-evidence/') for n in names), 5)
+                self.assertEqual(sum(n.startswith('generated-evidence/') for n in names), len(targets))
             self.assertEqual((game/'userdata/voice.txt').read_text(), 'English')
             self.assertEqual((game/'userdata/private-context.txt').read_text(), 'DO NOT INCLUDE PRIVATE CONTEXT')
             self.assertIsNone(json.loads((out/'collection-status.json').read_text())['fatal'])

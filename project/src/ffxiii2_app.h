@@ -564,7 +564,7 @@ class Ffxiii2App : public rex::ReXApp {
   void OnPreSetup(rex::RuntimeConfig& config) override {
     config.audio_factory = REX_AUDIO_BACKEND(X2AudioSystem);
     // XIII-2_Test.ps1 looks for this line: without it the game that ran is an older build.
-    REXLOG_INFO("XIII-2 build: test v44 (title update 0.0.1.13)");
+    REXLOG_INFO("XIII-2 build: test v45 (title update 0.0.1.13)");
     // Render resolution (resolution.txt in the settings folder): read by the renderer plugin
     // when it is loaded, right after this.
     X2ResolutionStartup(user_data_root());
@@ -627,7 +627,7 @@ class Ffxiii2App : public rex::ReXApp {
       std::error_code ec2;
       const bool installed = std::filesystem::exists(jp / "filelist_patch_u.x360.bin", ec2);
       const bool have_tu = std::filesystem::exists(tu / "x2_title_update.txt", ec2);
-      const bool have_merged = have_tu && std::filesystem::exists(merged / "x2_merged.txt", ec2);
+      const bool have_merged = have_tu && std::filesystem::exists(merged / "x2_merged_v2.txt", ec2);
       const bool given = !paths.update_data_root.empty();
       const auto policy = X2SelectVoicePolicy(v == "jp", have_tu, installed, have_merged, given);
       X2SetDlcVoiceAtStart(policy.request_japanese_dlc);
