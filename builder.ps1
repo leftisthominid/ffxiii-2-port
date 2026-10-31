@@ -9,8 +9,11 @@ $Here=$PSScriptRoot
 . (Join-Path $Here 'builder\moogle.ps1')
 
 function Say([string]$text,[string]$color='') {
-    $text = Format-MogMessage $text
+    if ($color -ne 'Red') { $text = Format-MogMessage $text }
     if ($color) { Write-Host $text -ForegroundColor $color } else { Write-Host $text }
+}
+function Read-Host([string]$Prompt) {
+    Microsoft.PowerShell.Utility\Read-Host -Prompt (Format-MogPrompt $Prompt)
 }
 function Ask-YesNo([string]$question) {
     while ($true) {
