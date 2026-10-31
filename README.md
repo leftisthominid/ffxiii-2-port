@@ -118,10 +118,23 @@ In-game loading still needs verification.
   provides shared tools and porting work.
 - **[ReXGlue SDK](https://github.com/rexglue/rexglue-sdk)**: the recompiler, runtime, and renderer
   this port is built on (BSD-3-Clause), itself derived from **[Xenia](https://github.com/xenia-project/xenia)**.
-- **Surihix / WhiteBinTools**: the file-list / archive work credited in the converter source.
-- Downloaded or used by the builder: LLVM, CMake, Ninja,
-  [Real-ESRGAN](https://github.com/xinntao/Real-ESRGAN), FFmpeg (Gyan's Windows builds), Python,
-  NumPy, and the libraries used by the ReXGlue SDK, each under its own license.
+- **[bucanero](https://github.com/bucanero)**: the XIII-family save cipher (`ff13-decrypter`),
+  PS3 save key derivation (`apollo-lib`), and Apollo PS3 save tools and format work followed
+  by this port's Steam and PS3 save import code (GPL-3.0). The XIII-2 secure file IDs come
+  from the XIII-2 entries in Apollo's `games.conf`.
+- **flatz**: `pfdtool`, the PS3 `PARAM.PFD` format, and save-file decryption followed by the
+  XIII-2 PS3 save implementation.
+- **Surihix / WhiteBinTools**: the file-list and archive cryptography used by the converters
+  (GPL-3.0).
+- **AMD**: the DXBC checksum code used by the shared renderer, via Xenia.
+- **Microsoft**: the GameInput header (MIT), used for the controller's Share button.
+- **Sean Barrett**: `stb_image` and `stb_image_write` (public domain / MIT), used by the
+  application-icon converter.
+- **Baldur Karlsson**: the RenderDoc API header (MIT), used by the shared renderer.
+- Downloaded or used by the Windows builder, rather than all being bundled in this repository:
+  LLVM, CMake, Ninja, [Real-ESRGAN](https://github.com/xinntao/Real-ESRGAN) (icon upscaling),
+  FFmpeg (Gyan's Windows builds), Python, NumPy, and the ReXGlue SDK's dependencies, including
+  SDL3, FFmpeg, Vulkan headers, glslang, and SPIRV-Tools, each under its own license.
 
 Shared components retain their existing attribution. The icon and Xbox extraction tools are adapted from the Lightning Returns builder.
 The icon converter uses stb image libraries under their included licenses.
