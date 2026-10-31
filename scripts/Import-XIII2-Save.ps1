@@ -33,7 +33,8 @@ try {
     $sha=[Security.Cryptography.SHA256]::Create()
     try {$actual=([BitConverter]::ToString($sha.ComputeHash($canonical))).Replace('-','').ToLowerInvariant()} finally {$sha.Dispose()}
     if ($actual -ne $expected) {throw 'Importer checksum mismatch. Unpack a fresh copy of the save tool.'}
-    $shell=Join-Path $PSHOME $(if ($PSVersionTable.PSEdition -eq 'Core') {'pwsh.exe'} else {'powershell.exe'})
+    $shellName=if ($PSVersionTable.PSEdition -eq 'Core') {if ($env:OS -eq 'Windows_NT') {'pwsh.exe'} else {'pwsh'}} else {'powershell.exe'}
+    $shell=Join-Path $PSHOME $shellName
     # Validate all package blocks and APP.DAT before any existing save is changed.
     $validation=@(& $shell -NoProfile -ExecutionPolicy Bypass -File $importer -Source $Source -UserData $userdata -Only saves -WhatIf)
     $validation | ForEach-Object {Write-Host $_}
