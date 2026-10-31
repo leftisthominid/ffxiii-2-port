@@ -65,11 +65,13 @@ loading the imported save in the game and native Windows save-tool operation rem
 
 ## Use
 
-Download the **[Windows builder](https://raw.githubusercontent.com/leftisthominid/ffxiii-2-port/3ff5500291933d619dcc4e71f74504fc2f8a1136/releases/current-tools/Final-Fantasy-XIII-2-Builder.zip)**
-and unpack it anywhere. The separate **[Xbox 360 save importer](https://raw.githubusercontent.com/leftisthominid/ffxiii-2-port/3ff5500291933d619dcc4e71f74504fc2f8a1136/releases/current-tools/Final-Fantasy-XIII-2-Save-Importer.zip)**
-is available for existing saves. Check either download against **[SHA256SUMS.txt](https://raw.githubusercontent.com/leftisthominid/ffxiii-2-port/3ff5500291933d619dcc4e71f74504fc2f8a1136/releases/current-tools/SHA256SUMS.txt)**.
-These links point to verified tool packages in the repository; a GitHub Latest release has
-not yet been published.
+Download the **[Windows builder](https://raw.githubusercontent.com/leftisthominid/ffxiii-2-port/6771124ba14bb1ad6923369f606a8fa195b2b091/releases/beta-tools/Final-Fantasy-XIII-2-Builder.zip)**
+and unpack it anywhere. The separate **[Xbox 360 save importer](https://raw.githubusercontent.com/leftisthominid/ffxiii-2-port/6771124ba14bb1ad6923369f606a8fa195b2b091/releases/beta-tools/Final-Fantasy-XIII-2-Save-Importer.zip)**
+is available for existing saves. Check either download against **[SHA256SUMS.txt](https://raw.githubusercontent.com/leftisthominid/ffxiii-2-port/6771124ba14bb1ad6923369f606a8fa195b2b091/releases/beta-tools/SHA256SUMS.txt)**.
+The **[beta release](https://github.com/leftisthominid/ffxiii-2-port/releases/tag/triumtemporate-beta-1)**
+is published as a pre-release. The maintained builder and save-tool sources are on
+**[release/triumtemporate-tools](https://github.com/leftisthominid/ffxiii-2-port/tree/release/triumtemporate-tools)**;
+the downloads above are self-contained.
 
 Double-click **`Build Final Fantasy XIII-2.bat`**. It starts `builder.ps1`, explains how the
 project was made, asks for your game copies and title update, and builds the Windows program.
@@ -103,13 +105,15 @@ In-game loading still needs verification.
 
 ## What is in this repository
 
+The maintained tool source layout on `release/triumtemporate-tools`:
+
 | Folder | What |
 |---|---|
 | `Build Final Fantasy XIII-2.bat`, `builder.ps1`, `builder\` | the interactive builder, resumable pipeline, and content preparation |
 | `project\` | the ReXGlue project: CMake files, the recompiler manifest and function hints, and the port's own code (`src\`) |
 | `converters\` | game-format, texture, shader, movie, and Japanese voice converters |
 | `scripts\` | content / save import, packaging, and verification tools |
-| `releases\current-tools\` | source-only builder and save-importer downloads, release notes, and checksums |
+| `releases\beta-tools\` | source-only beta builder and save-importer downloads, release notes, and checksums |
 
 ## Credits
 
