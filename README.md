@@ -26,7 +26,10 @@ Source changes still need review and gameplay testing.
   extract `tu0000000d_00000000` from the flash drive's Xbox content storage, under
   `Content\0000000000000000\53510806\000B0000`.
 - Optional, each adds something:
-  - **The PS3 disc image**: PS3 cinematics and button / UI assets.
+  - **The PS3 disc image or extracted disc folder**: PS3 cinematics and PlayStation button / UI
+    assets. The current builder takes PlayStation graphics from this copy. The recovered Steam
+    controller sheets inspected so far contain Xbox and generic gamepad graphics; the complete
+    Steam installation has not been exhaustively checked for unused PlayStation assets.
   - **The Steam version**: Japanese voices and experimental conversion of Steam DLC content.
     Text language is selected separately; Japanese voices do not require installing the
     Steam-derived DLC packages.
@@ -56,9 +59,17 @@ when a matching Japanese replacement cannot be prepared. DLC lip-sync remains ex
 
 **The Android version is on hold.** Current development and testing focus on Windows.
 
+The standalone builder still needs a confirmed complete Windows run. Xbox save package
+validation, extraction, backup, and save-header generation have been checked locally;
+loading the imported save in the game and native Windows save-tool operation remain unverified.
+
 ## Use
 
-Get the builder: **Code > Download ZIP** on this page (or `git clone`), and unpack it anywhere.
+Download the **[Windows builder](https://raw.githubusercontent.com/leftisthominid/ffxiii-2-port/3ff5500291933d619dcc4e71f74504fc2f8a1136/releases/current-tools/Final-Fantasy-XIII-2-Builder.zip)**
+and unpack it anywhere. The separate **[Xbox 360 save importer](https://raw.githubusercontent.com/leftisthominid/ffxiii-2-port/3ff5500291933d619dcc4e71f74504fc2f8a1136/releases/current-tools/Final-Fantasy-XIII-2-Save-Importer.zip)**
+is available for existing saves. Check either download against **[SHA256SUMS.txt](https://raw.githubusercontent.com/leftisthominid/ffxiii-2-port/3ff5500291933d619dcc4e71f74504fc2f8a1136/releases/current-tools/SHA256SUMS.txt)**.
+These links point to verified tool packages in the repository; a GitHub Latest release has
+not yet been published.
 
 Double-click **`Build Final Fantasy XIII-2.bat`**. It starts `builder.ps1`, explains how the
 project was made, asks for your game copies and title update, and builds the Windows program.
@@ -81,11 +92,14 @@ settings are under **Settings > Port Settings**, including Voice Language, Text 
 Button Prompts, frame rate, anti-aliasing, and Story Recaps. Restart when prompted after
 changing language. Higher frame rates and settings combinations still need gameplay testing.
 
-To import an Xbox 360 save, use the separate **Final Fantasy XIII-2 Save Importer** package.
+To import an Xbox 360 save, unpack the separate **Final Fantasy XIII-2 Save Importer** download.
 Close the game, double-click **`Import Final Fantasy XIII-2 Save.bat`**, and supply the original
-Xbox save package and your builder output folder. It validates the game title and package,
-backs up existing saves and headers, and prepares the save for the port. Final Fantasy XIII
-saves are rejected. In-game loading still needs verification.
+Xbox `.dat` save package and your builder output folder (normally `C:\Final Fantasy XIII-2`).
+The tool validates the game title and package, backs up existing saves and headers, and
+prepares the save for the port. An existing save in the same slot is replaced after backup;
+keep the backup folder shown by the tool. Final Fantasy XIII saves are rejected even though
+their filenames can resemble XIII-2 saves. Start the game normally and choose **Load Game**.
+In-game loading still needs verification.
 
 ## What is in this repository
 
@@ -95,7 +109,7 @@ saves are rejected. In-game loading still needs verification.
 | `project\` | the ReXGlue project: CMake files, the recompiler manifest and function hints, and the port's own code (`src\`) |
 | `converters\` | game-format, texture, shader, movie, and Japanese voice converters |
 | `scripts\` | content / save import, packaging, and verification tools |
-| `releases\` | source-only builder packages and checksum manifests |
+| `releases\current-tools\` | source-only builder and save-importer downloads, release notes, and checksums |
 
 ## Credits
 
