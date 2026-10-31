@@ -81,6 +81,12 @@ settings are under **Settings > Port Settings**, including Voice Language, Text 
 Button Prompts, frame rate, anti-aliasing, and Story Recaps. Restart when prompted after
 changing language. Higher frame rates and settings combinations still need gameplay testing.
 
+To import an Xbox 360 save, use the separate **Final Fantasy XIII-2 Save Importer** package.
+Close the game, double-click **`Import Final Fantasy XIII-2 Save.bat`**, and supply the original
+Xbox save package and your builder output folder. It validates the game title and package,
+backs up existing saves and headers, and prepares the save for the port. Final Fantasy XIII
+saves are rejected. In-game loading still needs verification.
+
 ## What is in this repository
 
 | Folder | What |
